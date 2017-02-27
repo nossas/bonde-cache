@@ -7,30 +7,20 @@ import (
 	"encoding/json"
 	"time"
 	"os"
+  "io/ioutil"
 )
 
-var myClient = &http.Client{Timeout: 10 * time.Second}
-
-func getJson(url string, target interface{}) error {
-    r, err := myClient.Get(url)
-    if err != nil {
-        return err
-    }
-    defer r.Body.Close()
-
-    return json.NewDecoder(r.Body).Decode(target)
-}
-
 type Mobilization struct {
-    ID int
-		Name string
-		Slug string
-		CustomDomain string
+	ID int `json:id`
+	Name string `json:name`
+	Slug string `json:slug`
+	CustomDomain string `json:custom_domain`
 }
 
 func main() {
 	port := os.Getenv("PORT")
 	e := echo.New()
+	e.Debug = true
 
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
@@ -39,10 +29,27 @@ func main() {
 		e.Logger.Fatal("$PORT must be set")
 	}
 
+	var myClient = &http.Client{Timeout: 10 * time.Second}
+  r, err := myClient.Get("https://api-ssl.reboo.org/mobilizations")
+  if err != nil {
+      e.Logger.Fatal(err)
+  }
+  defer r.Body.Close()
+
+	jsonDataFromHttp, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+					panic(err)
+	}
+	var jsonData []Mobilization
+
+	err = json.Unmarshal([]byte(jsonDataFromHttp), &jsonData) // here!
+
+	if err != nil {
+					panic(err)
+	}
+
 	e.GET("/", func(c echo.Context) error {
-		mob := new(Mobilization) // or &Foo{}
-		getJson("https://api-ssl.reboo.org/mobilizations", mob)
-		return c.String(http.StatusOK, mob.Name)
+		return c.String(http.StatusOK, 	jsonData[0].Name)
 	})
 
 	e.Logger.Fatal(e.Start(":" + port))
