@@ -142,6 +142,8 @@ func main() {
     e := echo.New()
     e.Use(middleware.Logger())
     e.Use(middleware.Recover())
+    e.Use(middleware.GzipWithConfig(middleware.GzipConfig{ Level: 5 }))
+    e.Use(middleware.BodyLimit("1M"))
     e.Static("/dist", "public/dist")
     e.Static("/wysihtml", "public/wysihtml")
 
@@ -171,6 +173,7 @@ func main() {
         e.Debug = true
         e.Logger.Fatal(e.Start(":" + os.Getenv("PORT")))
     } else {
+        e.Pre(middleware.RemoveTrailingSlash())
         e.Pre(middleware.HTTPSWWWRedirect())
         e.AutoTLSManager.Cache = autocert.DirCache("/tmp/.cache")
         e.Logger.Fatal(e.StartAutoTLS(":443"))
