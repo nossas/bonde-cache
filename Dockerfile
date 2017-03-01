@@ -1,3 +1,3 @@
 FROM golang:onbuild
 RUN go get github.com/codegangsta/gin
-ENV PORT 5000
+ENV CACHE_INTERVAL 300

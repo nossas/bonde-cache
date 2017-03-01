@@ -12,5 +12,5 @@ Bonde Cache
 
 ```
 docker build -t bonde-cache .
-docker run -it --rm -p 3000:3000 -v "$PWD":/go/src/app -w /go/src/app --name bonde-cache-app bonde-cache gin
+docker run -it --rm -p 3000:3000 -v "$PWD":/go/src/app -w /go/src/app -e IS_DEV=true --name bonde-cache-app bonde-cache gin
 ```

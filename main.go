@@ -1,16 +1,18 @@
 package main
 
 import (
-    "net/http"
     "github.com/labstack/echo"
     "github.com/labstack/echo/middleware"
+    "golang.org/x/crypto/acme/autocert"
+    "github.com/boltdb/bolt"
+    "net/http"
     "encoding/json"
+    "io/ioutil"
     "time"
     "os"
-    "io/ioutil"
     "fmt"
-    "github.com/boltdb/bolt"
     "net"
+    "strconv"
 )
 
 type Mobilization struct {
@@ -26,68 +28,7 @@ type HttpResponse struct {
     err error
 }
 
-func asyncHttpGets(urls[]string, db*bolt.DB)[]*HttpResponse {
-    ch := make(chan *HttpResponse, len(urls)) // buffered
-    responses := []* HttpResponse {}
-
-    for _, url := range urls {
-        go func(url string) {
-            fmt.Printf("Fetching %s \n", url)
-            resp, err := http.Get(url)
-            if err == nil {
-                body, err := ioutil.ReadAll(resp.Body)
-                if err == nil {
-                    db.Update(func(tx * bolt.Tx) error {
-                        b, err := tx.CreateBucketIfNotExists([]byte("cached_urls"))
-                        if err != nil {
-                            return fmt.Errorf("create bucket: %s", err)
-                        }
-                        err2 := b.Put([]byte(url), body)
-                        return err2
-                    })
-                }
-                defer resp.Body.Close()
-            }
-            ch <- & HttpResponse { url, resp, err }
-        }(url)
-    }
-
-    for {
-        select {
-            case r := <-ch:
-                fmt.Printf("%s was fetched\n", r.url)
-                responses = append(responses, r)
-                if len(responses) == len(urls) {
-                    return responses
-                }
-            case <-time.After(50 * time.Millisecond):
-                fmt.Printf(".")
-        }
-    }
-
-    return responses
-}
-
-func main() {
-    port := os.Getenv("PORT")
-
-    db, err := bolt.Open("bonde-cache.db", 0600, nil)
-    if err != nil {
-        fmt.Println(err)
-    }
-
-    e := echo.New()
-    e.Debug = true
-
-    e.Use(middleware.Logger())
-    e.Use(middleware.Recover())
-    e.Static("/dist", "public/dist")
-    e.Static("/wysihtml", "public/wysihtml")
-
-    if port == "" {
-        e.Logger.Fatal("$PORT must be set")
-    }
-
+func getUrls() []string {
     var myClient = & http.Client { Timeout: 10 * time.Second }
     r, err := myClient.Get("https://api-ssl.reboo.org/mobilizations")
     if err != nil {
@@ -95,8 +36,7 @@ func main() {
     }
     defer r.Body.Close()
 
-    jsonDataFromHttp,
-    err := ioutil.ReadAll(r.Body)
+    jsonDataFromHttp, err := ioutil.ReadAll(r.Body)
     if err != nil {
         panic(err)
     }
@@ -113,14 +53,18 @@ func main() {
             urls = append(urls, "http://" + jd.Custom_Domain)
         }
     }
+    return urls
+}
 
-    ticker := time.NewTicker(300 * time.Second)
+func refreshCache(urls[]string, db*bolt.DB, interval string)[]*HttpResponse {
+    i, _ := strconv.Atoi(interval)
+    ticker := time.NewTicker(time.Duration(i) * time.Second)
     quit := make(chan struct{})
     go func() {
         for {
            select {
             case <- ticker.C:
-                results := asyncHttpGets(urls, db)
+                results := readCacheContent(urls, db)
                 for _, result := range results {
                     if (result.response != nil) {
                         fmt.Printf("%s status: %s\n", result.url, result.response.Status)
@@ -132,6 +76,78 @@ func main() {
             }
         }
     }()
+    return nil
+}
+
+func readCacheContent(urls[]string, db*bolt.DB)[]*HttpResponse {
+    ch := make(chan *HttpResponse, len(urls)) // buffered
+    responses := []* HttpResponse {}
+
+    for _, url := range urls {
+        go func(url string) {
+            fmt.Printf("fetch url %s \n", url)
+            resp, err := http.Get(url)
+            if err == nil {
+                saveCacheContent(url, resp, db)
+            } else {
+                fmt.Errorf("error read response http: %s", err)
+            }
+            ch <- & HttpResponse { url, resp, err }
+        }(url)
+    }
+
+    for {
+        select {
+            case r := <-ch:
+                fmt.Printf("fetched url %s\n", r.url)
+                responses = append(responses, r)
+                if len(responses) == len(urls) {
+                    return responses
+                }
+            case <-time.After(50 * time.Millisecond):
+                fmt.Printf(".")
+        }
+    }
+
+    return responses
+}
+
+func saveCacheContent(url string, resp *http.Response, db *bolt.DB) {
+    body, err := ioutil.ReadAll(resp.Body)
+    if err == nil {
+        err := db.Update(func(tx * bolt.Tx) error {
+            b, err := tx.CreateBucketIfNotExists([]byte("cached_urls"))
+            if err != nil {
+                return fmt.Errorf("error create cache bucket: %s", err)
+            }
+            b.Put([]byte(url), body)
+            fmt.Printf("saved body content url %s \n", url)
+            return nil
+        })
+        if err != nil {
+            fmt.Errorf("error save content %s", err)
+        }
+    } else {
+        fmt.Errorf("error read response body: %s", err)
+    }
+    defer resp.Body.Close()
+}
+
+func main() {
+    db, err := bolt.Open("bonde-cache.db", 0600, nil)
+    if err != nil {
+        fmt.Errorf("open cache: %s", err)
+    }
+
+    e := echo.New()
+    e.Use(middleware.Logger())
+    e.Use(middleware.Recover())
+    e.Static("/dist", "public/dist")
+    e.Static("/wysihtml", "public/wysihtml")
+
+    urls := getUrls()
+    readCacheContent(urls, db) // force first time build cache
+    refreshCache(urls, db, os.Getenv("CACHE_INTERVAL"))
 
     e.GET("/", func(c echo.Context) error {
         req := c.Request()
@@ -140,11 +156,24 @@ func main() {
         err := db.View(func(tx *bolt.Tx) error {
             b := tx.Bucket([]byte("cached_urls"))
             v := b.Get([]byte("http://" + host))
-            fmt.Println(host)
-            return c.HTML(http.StatusOK, string(v))
+            fmt.Printf("saved body content url %s \n", "http://" + host)
+            c.HTML(http.StatusOK, string(v))
+            return nil
         })
-        return err
+        if err != nil {
+            fmt.Errorf("%s", err)
+        }
+        return nil
     })
 
-    e.Logger.Fatal(e.Start(":" + port))
+    isdev, err := strconv.ParseBool(os.Getenv("IS_DEV"))
+    if isdev {
+        e.Debug = true
+        e.Logger.Fatal(e.Start(":" + os.Getenv("PORT")))
+    } else {
+        e.Pre(middleware.HTTPSWWWRedirect())
+        e.AutoTLSManager.Cache = autocert.DirCache("/tmp/.cache")
+        e.Logger.Fatal(e.StartAutoTLS(":443"))
+    }
+    defer db.Close()
 }
