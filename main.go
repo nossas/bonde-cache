@@ -30,6 +30,15 @@ func asyncHttpGets(urls[]string, db*bolt.DB)[]*HttpResponse {
     ch := make(chan *HttpResponse, len(urls)) // buffered
     responses := []* HttpResponse {}
 
+    db.Update(func(tx * bolt.Tx) error {
+        b, err := tx.CreateBucketIfNotExists([]byte("cached_urls"))
+        if err != nil {
+            return fmt.Errorf("create bucket: %s", err)
+        }
+        err2 := b.Put([]byte("updated_at"), []byte(time.Now()))
+        return err2
+    })
+
     for _, url := range urls {
         go func(url string) {
             fmt.Printf("Fetching %s \n", url)
