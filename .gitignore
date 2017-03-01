@@ -1,4 +1,4 @@
 .env
 .docker_build/
-bonde-cache
+bonde-cache*
 gin-bin
