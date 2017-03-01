@@ -5,6 +5,7 @@ import (
     "github.com/labstack/echo/middleware"
     "golang.org/x/crypto/acme/autocert"
     "github.com/boltdb/bolt"
+    rice "github.com/GeertJohan/go.rice"
     "net/http"
     "encoding/json"
     "io/ioutil"
@@ -144,8 +145,10 @@ func main() {
     e.Use(middleware.Recover())
     e.Use(middleware.GzipWithConfig(middleware.GzipConfig{ Level: 5 }))
     e.Use(middleware.BodyLimit("1M"))
-    e.Static("/dist", "public/dist")
-    e.Static("/wysihtml", "public/wysihtml")
+
+	assetHandler := http.FileServer(rice.MustFindBox("./public/").HTTPBox())
+	e.GET("/dist/*", echo.WrapHandler(assetHandler))
+    e.GET("/wysihtml/*", echo.WrapHandler(assetHandler))
 
     urls := getUrls()
     readCacheContent(urls, db) // force first time build cache
