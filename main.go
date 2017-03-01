@@ -26,13 +26,9 @@ type HttpResponse struct {
     err error
 }
 
-func asyncHttpGets(urls[]string)[]*HttpResponse {
+func asyncHttpGets(urls[]string, db*bolt.DB)[]*HttpResponse {
     ch := make(chan *HttpResponse, len(urls)) // buffered
     responses := []* HttpResponse {}
-    db, err := bolt.Open("bonde-cache.db", 0600, nil)
-    if err != nil {
-        fmt.Println(err)
-    }
 
     for _, url := range urls {
         go func(url string) {
@@ -69,18 +65,24 @@ func asyncHttpGets(urls[]string)[]*HttpResponse {
         }
     }
 
-    defer db.Close()
     return responses
 }
 
 func main() {
     port := os.Getenv("PORT")
 
-        e := echo.New()
+    db, err := bolt.Open("bonde-cache.db", 0600, nil)
+    if err != nil {
+        fmt.Println(err)
+    }
+
+    e := echo.New()
     e.Debug = true
 
     e.Use(middleware.Logger())
     e.Use(middleware.Recover())
+    e.Static("/dist", "public/dist")
+    e.Static("/wysihtml", "public/wysihtml")
 
     if port == "" {
         e.Logger.Fatal("$PORT must be set")
@@ -112,7 +114,7 @@ func main() {
         }
     }
 
-    results := asyncHttpGets(urls)
+    results := asyncHttpGets(urls, db)
     for _, result := range results {
         if (result.response != nil) {
             fmt.Printf("%s status: %s\n", result.url, result.response.Status)
@@ -123,7 +125,13 @@ func main() {
         req := c.Request()
         host, _, _ := net.SplitHostPort(req.Host)
 
-        return c.String(http.StatusOK, host)
+        err := db.View(func(tx *bolt.Tx) error {
+            b := tx.Bucket([]byte("cached_urls"))
+            v := b.Get([]byte("http://" + host))
+            fmt.Println(host)
+            return c.HTML(http.StatusOK, string(v))
+        })
+        return err
     })
 
     e.Logger.Fatal(e.Start(":" + port))
