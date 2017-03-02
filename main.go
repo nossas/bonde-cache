@@ -13,7 +13,10 @@ import (
     "os"
     "fmt"
     "net"
+    "bytes"
     "strconv"
+    "io"
+    "golang.org/x/net/html"
 )
 
 type Mobilization struct {
@@ -87,7 +90,9 @@ func readCacheContent(urls[]string, db*bolt.DB)[]*HttpResponse {
     for _, url := range urls {
         go func(url string) {
             fmt.Printf("fetch url %s \n", url)
-            resp, err := http.Get(url)
+            var myClient = & http.Client { Timeout: 10 * time.Second }
+            resp, err := myClient.Get(url)
+            // defer resp.Body.Close()
             if err == nil {
                 saveCacheContent(url, resp, db)
             } else {
@@ -115,6 +120,7 @@ func readCacheContent(urls[]string, db*bolt.DB)[]*HttpResponse {
 
 func saveCacheContent(url string, resp *http.Response, db *bolt.DB) {
     body, err := ioutil.ReadAll(resp.Body)
+    readContentAssets(body, url)
     if err == nil {
         err := db.Update(func(tx * bolt.Tx) error {
             b, err := tx.CreateBucketIfNotExists([]byte("cached_urls"))
@@ -131,7 +137,89 @@ func saveCacheContent(url string, resp *http.Response, db *bolt.DB) {
     } else {
         fmt.Errorf("error read response body: %s", err)
     }
+}
+
+// Helper function to pull the href attribute from a Token
+func getJS(t html.Token, url string) (ok bool) {
+    // ok = false
+    // Iterate over all of the Token's attributes until we find an "href"
+    for _, a := range t.Attr {
+        if a.Key == "src" {
+            downloadFile("./public" + a.Val, url + a.Val)
+            // href = a.Val
+            ok = true
+        }
+    }
+
+    // "bare" return will return the variables (ok, href) as defined in
+    // the function definition
+    return
+}
+
+// Helper function to pull the href attribute from a Token
+func getCSS(t html.Token, url string) (ok bool) {
+    // ok = false
+    // Iterate over all of the Token's attributes until we find an "href"
+    for _, a := range t.Attr {
+        if a.Key == "href" {
+            downloadFile("./public" + a.Val, url + a.Val)
+            // href = a.Val
+            ok = true
+        }
+    }
+
+    // "bare" return will return the variables (ok, href) as defined in
+    // the function definition
+    return
+}
+
+
+func downloadFile(filepath string, url string) (err error) {
+    // Create the file
+    out, err := os.Create(filepath)
+    if err != nil  {
+        return err
+    }
+    defer out.Close()
+
+    var myClient = & http.Client { Timeout: 10 * time.Second }
+    // Get the data
+    resp, err := myClient.Get(url)
+    if err != nil {
+        return err
+    }
     defer resp.Body.Close()
+
+    // Writer the body to file
+    _, err = io.Copy(out, resp.Body)
+    if err != nil  {
+        return err
+    }
+
+    return nil
+}
+
+// https://schier.co/blog/2015/04/26/a-simple-web-scraper-in-go.html
+func readContentAssets(body []byte, url string) {
+    r := bytes.NewReader(body)
+    z := html.NewTokenizer(r)
+    for {
+        tt := z.Next()
+        t := z.Token()
+        switch {
+        case tt == html.ErrorToken:
+            // End of the document, we're done
+            return
+        case tt == html.StartTagToken:
+            if (t.Data == "script") {
+                getJS(t, url)
+            }
+        case tt == html.SelfClosingTagToken:
+            if (t.Data == "link") {
+                getCSS(t, url)
+            }
+        }
+    }
 }
 
 func main() {
@@ -140,19 +228,19 @@ func main() {
         fmt.Errorf("open cache: %s", err)
     }
 
+    urls := getUrls()
+    readCacheContent(urls, db) // force first time build cache
+    refreshCache(urls, db, os.Getenv("CACHE_INTERVAL"))
+
     e := echo.New()
     e.Use(middleware.Logger())
     e.Use(middleware.Recover())
     e.Use(middleware.GzipWithConfig(middleware.GzipConfig{ Level: 5 }))
     e.Use(middleware.BodyLimit("1M"))
 
-	assetHandler := http.FileServer(rice.MustFindBox("./public/").HTTPBox())
-	e.GET("/dist/*", echo.WrapHandler(assetHandler))
+    assetHandler := http.FileServer(rice.MustFindBox("./public/").HTTPBox())
+    e.GET("/dist/*", echo.WrapHandler(assetHandler))
     e.GET("/wysihtml/*", echo.WrapHandler(assetHandler))
-
-    urls := getUrls()
-    readCacheContent(urls, db) // force first time build cache
-    refreshCache(urls, db, os.Getenv("CACHE_INTERVAL"))
 
     e.GET("/", func(c echo.Context) error {
         req := c.Request()
@@ -161,7 +249,6 @@ func main() {
         err := db.View(func(tx *bolt.Tx) error {
             b := tx.Bucket([]byte("cached_urls"))
             v := b.Get([]byte("http://" + host))
-            fmt.Printf("saved body content url %s \n", "http://" + host)
             c.HTML(http.StatusOK, string(v))
             return nil
         })
@@ -178,8 +265,10 @@ func main() {
     } else {
         e.Pre(middleware.RemoveTrailingSlash())
         e.Pre(middleware.HTTPSWWWRedirect())
+        e.AutoTLSManager.HostPolicy = autocert.HostWhitelist(urls...)
         e.AutoTLSManager.Cache = autocert.DirCache("/tmp/.cache")
         e.Logger.Fatal(e.StartAutoTLS(":443"))
+        e.Logger.Fatal(e.Start(":80"))
     }
     defer db.Close()
 }
