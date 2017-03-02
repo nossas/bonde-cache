@@ -32,7 +32,7 @@ type HttpResponse struct {
     err error
 }
 
-func getUrls() []string {
+func getUrls() (url[]string, customDomains[]string) {
     var myClient = & http.Client { Timeout: 10 * time.Second }
     r, err := myClient.Get("https://api-ssl.reboo.org/mobilizations")
     if err != nil {
@@ -52,15 +52,17 @@ func getUrls() []string {
     }
 
     urls := make([]string, 0)
+    customDomains = make([]string, 0)
     for _, jd := range jsonData {
         if jd.Custom_Domain != "" {
-            urls = append(urls, "http://" + jd.Custom_Domain)
+            urls = append(urls, "http://" + jd.Slug + ".reboo.org")
+            customDomains = append(customDomains, jd.Custom_Domain)
         }
     }
-    return urls
+    return urls, customDomains
 }
 
-func refreshCache(urls[]string, db*bolt.DB, interval string)[]*HttpResponse {
+func refreshCache(urls[]string, customDomains[]string, db*bolt.DB, interval string)[]*HttpResponse {
     i, _ := strconv.Atoi(interval)
     ticker := time.NewTicker(time.Duration(i) * time.Second)
     quit := make(chan struct{})
@@ -68,7 +70,7 @@ func refreshCache(urls[]string, db*bolt.DB, interval string)[]*HttpResponse {
         for {
            select {
             case <- ticker.C:
-                results := readCacheContent(urls, db)
+                results := readCacheContent(urls, customDomains, db)
                 for _, result := range results {
                     if (result.response != nil) {
                         fmt.Printf("%s status: %s\n", result.url, result.response.Status)
@@ -83,23 +85,23 @@ func refreshCache(urls[]string, db*bolt.DB, interval string)[]*HttpResponse {
     return nil
 }
 
-func readCacheContent(urls[]string, db*bolt.DB)[]*HttpResponse {
+func readCacheContent(urls[]string, customDomains[]string, db*bolt.DB)[]*HttpResponse {
     ch := make(chan *HttpResponse, len(urls)) // buffered
     responses := []* HttpResponse {}
 
-    for _, url := range urls {
-        go func(url string) {
-            fmt.Printf("fetch url %s \n", url)
+    for i, url := range urls {
+        go func(url string,i int) {
+            fmt.Printf("fetch url %s \n", customDomains[i])
             var myClient = & http.Client { Timeout: 10 * time.Second }
             resp, err := myClient.Get(url)
             // defer resp.Body.Close()
             if err == nil {
-                saveCacheContent(url, resp, db)
+                saveCacheContent(url, customDomains[i], resp, db)
             } else {
                 fmt.Errorf("error read response http: %s", err)
             }
-            ch <- & HttpResponse { url, resp, err }
-        }(url)
+            ch <- & HttpResponse { customDomains[i], resp, err }
+        }(url, i)
     }
 
     for {
@@ -118,7 +120,7 @@ func readCacheContent(urls[]string, db*bolt.DB)[]*HttpResponse {
     return responses
 }
 
-func saveCacheContent(url string, resp *http.Response, db *bolt.DB) {
+func saveCacheContent(url string, customDomain string, resp *http.Response, db *bolt.DB) {
     body, err := ioutil.ReadAll(resp.Body)
     readContentAssets(body, url)
     if err == nil {
@@ -127,7 +129,7 @@ func saveCacheContent(url string, resp *http.Response, db *bolt.DB) {
             if err != nil {
                 return fmt.Errorf("error create cache bucket: %s", err)
             }
-            b.Put([]byte(url), body)
+            b.Put([]byte(customDomain), body)
             fmt.Printf("saved body content url %s \n", url)
             return nil
         })
@@ -228,9 +230,9 @@ func main() {
         fmt.Errorf("open cache: %s", err)
     }
 
-    urls := getUrls()
-    readCacheContent(urls, db) // force first time build cache
-    refreshCache(urls, db, os.Getenv("CACHE_INTERVAL"))
+    urls, customDomains := getUrls()
+    readCacheContent(urls, customDomains, db) // force first time build cache
+    refreshCache(urls, customDomains, db, os.Getenv("CACHE_INTERVAL"))
 
     e := echo.New()
     e.Use(middleware.Logger())
@@ -248,7 +250,8 @@ func main() {
 
         err := db.View(func(tx *bolt.Tx) error {
             b := tx.Bucket([]byte("cached_urls"))
-            v := b.Get([]byte("http://" + host))
+            fmt.Printf("%v", host)
+            v := b.Get([]byte(host))
             c.HTML(http.StatusOK, string(v))
             return nil
         })
@@ -263,12 +266,13 @@ func main() {
         e.Debug = true
         e.Logger.Fatal(e.Start(":" + os.Getenv("PORT")))
     } else {
+        e.Debug = true
+
         e.Pre(middleware.RemoveTrailingSlash())
         e.Pre(middleware.HTTPSWWWRedirect())
-        e.AutoTLSManager.HostPolicy = autocert.HostWhitelist(urls...)
+        e.AutoTLSManager.HostPolicy = autocert.HostWhitelist(customDomains...)
         e.AutoTLSManager.Cache = autocert.DirCache("/tmp/.cache")
         e.Logger.Fatal(e.StartAutoTLS(":443"))
-        e.Logger.Fatal(e.Start(":80"))
     }
-    defer db.Close()
+    // defer db.Close()
 }
