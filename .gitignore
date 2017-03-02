@@ -2,3 +2,7 @@
 .docker_build/
 bonde-cache*
 gin-bin
+public/dist/*
+!public/dist/.gitkeep
+public/wysihtml/*
+!public/wysihtml/.gitkeep
