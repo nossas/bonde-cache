@@ -225,6 +225,8 @@ func readContentAssets(body []byte, url string) {
 }
 
 func main() {
+    isdev, err := strconv.ParseBool(os.Getenv("IS_DEV"))
+
     db, err := bolt.Open("bonde-cache.db", 0600, nil)
     if err != nil {
         fmt.Errorf("open cache: %s", err)
@@ -237,7 +239,7 @@ func main() {
     e := echo.New()
     e.Use(middleware.Logger())
     e.Use(middleware.Recover())
-    e.Use(middleware.GzipWithConfig(middleware.GzipConfig{ Level: 5 }))
+    e.Use(middleware.GzipWithConfig(middleware.GzipConfig{ Level: 2 }))
     e.Use(middleware.BodyLimit("1M"))
 
     assetHandler := http.FileServer(rice.MustFindBox("./public/").HTTPBox())
@@ -246,11 +248,12 @@ func main() {
 
     e.GET("/", func(c echo.Context) error {
         req := c.Request()
-        host, _, _ := net.SplitHostPort(req.Host)
-
+        host := req.Host
+        if isdev {
+            host, _, _ = net.SplitHostPort(host)
+        }
         err := db.View(func(tx *bolt.Tx) error {
             b := tx.Bucket([]byte("cached_urls"))
-            fmt.Printf("%v", host)
             v := b.Get([]byte(host))
             c.HTML(http.StatusOK, string(v))
             return nil
@@ -261,18 +264,16 @@ func main() {
         return nil
     })
 
-    isdev, err := strconv.ParseBool(os.Getenv("IS_DEV"))
     if isdev {
         e.Debug = true
         e.Logger.Fatal(e.Start(":" + os.Getenv("PORT")))
     } else {
         e.Debug = true
-
         e.Pre(middleware.RemoveTrailingSlash())
         e.Pre(middleware.HTTPSWWWRedirect())
         e.AutoTLSManager.HostPolicy = autocert.HostWhitelist(customDomains...)
-        e.AutoTLSManager.Cache = autocert.DirCache("/tmp/.cache")
+        e.AutoTLSManager.Cache = autocert.DirCache("./cache/")
         e.Logger.Fatal(e.StartAutoTLS(":443"))
     }
-    // defer db.Close()
+    defer db.Close()
 }
