@@ -9,8 +9,8 @@ Bonde Cache
 7. download static files and serve dynamic (as found in html downloaded)
 8. add support to auto tls custom_domain
 9. production test with multiple domains and certificates
-
+10. verificar se a requisição voltar vazia e não sobrescrever cache
 ```
 docker build -t bonde-cache .
-docker run -it --rm -p 3000:3000 -v "$PWD":/go/src/app -w /go/src/app -e IS_DEV=true --name bonde-cache-app bonde-cache gin
+docker run -it --rm -p 3000:3000 -v "$PWD":/go/src/app -w /go/src/app -e IS_DEV=true --name bonde-cache-app nossas/bonde-cache gin
 ```

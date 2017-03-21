@@ -269,11 +269,23 @@ func main() {
         e.Logger.Fatal(e.Start(":" + os.Getenv("PORT")))
     } else {
         e.Debug = true
-        e.Pre(middleware.RemoveTrailingSlash())
+        ee := echo.New()
+        ee.Pre(middleware.RemoveTrailingSlash())
+        // ee.Pre(middleware.HTTPSRedirect())
+
         e.Pre(middleware.HTTPSWWWRedirect())
         e.AutoTLSManager.HostPolicy = autocert.HostWhitelist(customDomains...)
         e.AutoTLSManager.Cache = autocert.DirCache("./cache/")
-        e.Logger.Fatal(e.StartAutoTLS(":443"))
+
+        finish := make(chan bool)
+        go func() {
+            e.Logger.Fatal(ee.Start(":80"))
+        }()
+        go func() {
+            e.Logger.Fatal(e.StartAutoTLS(":443"))
+        }()
+        <-finish
+
     }
     defer db.Close()
 }
