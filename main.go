@@ -271,7 +271,8 @@ func main() {
         e.Debug = true
         ee := echo.New()
         ee.Pre(middleware.RemoveTrailingSlash())
-        // ee.Pre(middleware.HTTPSRedirect())
+        ee.Pre(middleware.WWWRedirect())
+        ee.Pre(middleware.HTTPSRedirect())
 
         e.Pre(middleware.HTTPSWWWRedirect())
         e.AutoTLSManager.HostPolicy = autocert.HostWhitelist(customDomains...)
