@@ -268,12 +268,6 @@ func main() {
         e.Debug = true
         e.Logger.Fatal(e.Start(":" + os.Getenv("PORT")))
     } else {
-        e.Debug = true
-        ee := echo.New()
-        ee.Pre(middleware.RemoveTrailingSlash())
-        ee.Pre(middleware.WWWRedirect())
-        ee.Pre(middleware.HTTPSRedirect())
-
         e.Pre(middleware.RemoveTrailingSlash())
         e.Pre(middleware.WWWRedirect())
         e.AutoTLSManager.HostPolicy = autocert.HostWhitelist(customDomains...)
@@ -281,6 +275,10 @@ func main() {
 
         finish := make(chan bool)
         go func() {
+            ee := echo.New()
+            ee.Pre(middleware.RemoveTrailingSlash())
+            ee.Pre(middleware.HTTPSWWWRedirect())
+            ee.Pre(middleware.HTTPSRedirect())
             e.Logger.Fatal(ee.Start(":80"))
         }()
         go func() {
