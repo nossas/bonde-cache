@@ -274,7 +274,8 @@ func main() {
         ee.Pre(middleware.WWWRedirect())
         ee.Pre(middleware.HTTPSRedirect())
 
-        e.Pre(middleware.HTTPSWWWRedirect())
+        e.Pre(middleware.RemoveTrailingSlash())
+        e.Pre(middleware.WWWRedirect())
         e.AutoTLSManager.HostPolicy = autocert.HostWhitelist(customDomains...)
         e.AutoTLSManager.Cache = autocert.DirCache("./cache/")
 
