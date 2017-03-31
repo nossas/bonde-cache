@@ -22,10 +22,10 @@ pipeline:
     port: 22
     script:
       - sudo docker pull nossas/bonde-cache:${DRONE_TAG} && \
-        sudo docker stop bonde-cache-${DRONE_TAG} && \
-        sudo docker run -it --rm -p 443:443 -p 80:80 -v "$PWD":/go/src/app -w /go/src/app --name bonde-cache-${DRONE_TAG} -d nossas/bonde-cache && \
-        sudo docker start bonde-cache-${DRONE_TAG} && \
-        sudo docker logs bonde-cache-${DRONE_TAG}
+        sudo docker stop bonde-cache-app && \
+        sudo docker run -it --rm -p 443:443 -p 80:80 -v "$PWD":/go/src/app -w /go/src/app --name bonde-cache-app -d nossas/bonde-cache && \
+        sudo docker start bonde-cache-app && \
+        sudo docker logs bonde-cache-app
     when:
       status: success
       event: tag
