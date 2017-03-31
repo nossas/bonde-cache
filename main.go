@@ -13,10 +13,7 @@ import (
     "os"
     "fmt"
     "net"
-    "bytes"
     "strconv"
-    "io"
-    "golang.org/x/net/html"
 )
 
 type Mobilization struct {
