@@ -2,7 +2,8 @@ FROM golang
 
 ENV CACHE_INTERVAL 600
 RUN ls bin
-COPY bin/bonde-cache .
-
-CMD ["bonde-cache"]
+COPY . .
+RUN ls
+RUN ls bin
+CMD ["bin/bonde-cache"]
 EXPOSE 443 80
