@@ -6,4 +6,4 @@ VOLUME ["/go/src/app"]
 WORKDIR /go/src/app
 COPY . .
 
-ENTRYPOINT ./bonde-cache
+CMD ["bonde-cache"]
