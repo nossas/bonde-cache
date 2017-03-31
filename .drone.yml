@@ -1,0 +1,37 @@
+pipeline:
+  build:
+    image: golang
+    commands:
+      - go get github.com/tools/godep
+      - godep restore
+      - go build
+      - go test
+  publish:
+    image: plugins/docker
+    repo: nossas/bonde-cache
+    username: lpirola
+    password: ${DOCKER_PASSWORD}
+    when:
+      event: tag
+  deployment:
+    image: appleboy/drone-ssh
+    host: cache.bonde.org
+    username: ubuntu
+    port: 22
+    script:
+      - sudo docker pull nossas/bonde-cache:latest
+      - sudo docker tag nossas/bonde-cache:latest dokku/bonde-cache:latest
+      - sudo docker stop bonde-cache-app
+      - sudo docker run -it --rm -p 443:443 -p 80:80 -v "$PWD":/go/src/github.com/bonde-cache -w /go/src/github.com/bonde-cache --name bonde-cache-app -d nossas/bonde-cache
+      - sudo docker start bonde-cache-app
+    when:
+      status: success
+      event: tag
+  notify:
+    image: plugins/slack
+    webhook: https://hooks.slack.com/services/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
+    channel: n_tech
+    username: CI - ${DRONE_REPO_NAME}
+    when:
+      event: [ push, tag, build, publish, deployment, pull_request ]
+      status: [ success, failure ]
