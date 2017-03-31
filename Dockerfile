@@ -1,4 +1,5 @@
 FROM golang
+WORKDIR /go/src/app
 
 ENV CACHE_INTERVAL 600
 RUN ls bin
