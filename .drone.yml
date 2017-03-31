@@ -5,7 +5,6 @@ pipeline:
       - go get github.com/tools/godep
       - godep restore
       - go build
-      - ls
       - go test
   publish:
     image: plugins/docker
