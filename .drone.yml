@@ -19,10 +19,9 @@ pipeline:
     username: ubuntu
     port: 22
     script:
-      - sudo docker pull nossas/bonde-cache:latest
-      - sudo docker tag nossas/bonde-cache:latest dokku/bonde-cache:latest
+      - sudo docker pull nossas/bonde-cache
       - sudo docker stop bonde-cache-app
-      - sudo docker run -it --rm -p 443:443 -p 80:80 -v "$PWD":/go/src/github.com/bonde-cache -w /go/src/github.com/bonde-cache --name bonde-cache-app -d nossas/bonde-cache
+      - sudo docker run -it --rm -p 443:443 -p 80:80 -v "$PWD":/go/src/app -w /go/src/app --name bonde-cache-app -d nossas/bonde-cache
       - sudo docker start bonde-cache-app
     when:
       status: success
