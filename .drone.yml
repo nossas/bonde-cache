@@ -11,7 +11,7 @@ pipeline:
     repo: nossas/bonde-cache
     username: lpirola
     password: ${DOCKER_PASSWORD}
-    tag:
+    tags:
       - ${DRONE_TAG}
     when:
       event: tag
