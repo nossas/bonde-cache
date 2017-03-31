@@ -1,9 +1,7 @@
 FROM golang
 
 ENV CACHE_INTERVAL 600
-
-VOLUME ["/go/src/app"]
-WORKDIR /go/src/app
+RUN ls
 COPY . .
 
 CMD ["bonde-cache"]
