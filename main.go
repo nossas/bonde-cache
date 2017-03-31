@@ -94,6 +94,7 @@ func readCacheContent(urls[]string, customDomains[]string, db*bolt.DB)[]*HttpRes
             fmt.Printf("fetch url %s \n", customDomains[i])
             var myClient = & http.Client { Timeout: 10 * time.Second }
             resp, err := myClient.Get(url)
+
             // defer resp.Body.Close()
             if err == nil {
                 saveCacheContent(url, customDomains[i], resp, db)
@@ -122,7 +123,7 @@ func readCacheContent(urls[]string, customDomains[]string, db*bolt.DB)[]*HttpRes
 
 func saveCacheContent(url string, customDomain string, resp *http.Response, db *bolt.DB) {
     body, err := ioutil.ReadAll(resp.Body)
-    readContentAssets(body, url)
+
     if err == nil {
         err := db.Update(func(tx * bolt.Tx) error {
             b, err := tx.CreateBucketIfNotExists([]byte("cached_urls"))
@@ -138,89 +139,6 @@ func saveCacheContent(url string, customDomain string, resp *http.Response, db *
         }
     } else {
         fmt.Errorf("error read response body: %s", err)
-    }
-}
-
-// Helper function to pull the href attribute from a Token
-func getJS(t html.Token, url string) (ok bool) {
-    // ok = false
-    // Iterate over all of the Token's attributes until we find an "href"
-    for _, a := range t.Attr {
-        if a.Key == "src" {
-            downloadFile("./public" + a.Val, url + a.Val)
-            // href = a.Val
-            ok = true
-        }
-    }
-
-    // "bare" return will return the variables (ok, href) as defined in
-    // the function definition
-    return
-}
-
-// Helper function to pull the href attribute from a Token
-func getCSS(t html.Token, url string) (ok bool) {
-    // ok = false
-    // Iterate over all of the Token's attributes until we find an "href"
-    for _, a := range t.Attr {
-        if a.Key == "href" {
-            downloadFile("./public" + a.Val, url + a.Val)
-            // href = a.Val
-            ok = true
-        }
-    }
-
-    // "bare" return will return the variables (ok, href) as defined in
-    // the function definition
-    return
-}
-
-
-func downloadFile(filepath string, url string) (err error) {
-    // Create the file
-    out, err := os.Create(filepath)
-    if err != nil  {
-        return err
-    }
-    defer out.Close()
-
-    var myClient = & http.Client { Timeout: 10 * time.Second }
-    // Get the data
-    resp, err := myClient.Get(url)
-    if err != nil {
-        return err
-    }
-    defer resp.Body.Close()
-
-    // Writer the body to file
-    _, err = io.Copy(out, resp.Body)
-    if err != nil  {
-        return err
-    }
-
-    return nil
-}
-
-// https://schier.co/blog/2015/04/26/a-simple-web-scraper-in-go.html
-func readContentAssets(body []byte, url string) {
-    r := bytes.NewReader(body)
-    z := html.NewTokenizer(r)
-    for {
-        tt := z.Next()
-        t := z.Token()
-        switch {
-        case tt == html.ErrorToken:
-            // End of the document, we're done
-            return
-        case tt == html.StartTagToken:
-            if (t.Data == "script") {
-                getJS(t, url)
-            }
-        case tt == html.SelfClosingTagToken:
-            if (t.Data == "link") {
-                getCSS(t, url)
-            }
-        }
     }
 }
 
