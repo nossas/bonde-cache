@@ -7,3 +7,4 @@ WORKDIR /go/src/app
 COPY . .
 
 CMD ["bonde-cache"]
+EXPOSE 443 80
