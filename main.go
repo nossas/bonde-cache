@@ -31,7 +31,7 @@ type HttpResponse struct {
 
 func getUrls() (url[]string, customDomains[]string) {
     var myClient = & http.Client { Timeout: 10 * time.Second }
-    r, err := myClient.Get("https://api-ssl.reboo.org/mobilizations")
+    r, err := myClient.Get("https://api.bonde.org/mobilizations")
     if err != nil {
         panic(err)
     }
@@ -52,7 +52,7 @@ func getUrls() (url[]string, customDomains[]string) {
     customDomains = make([]string, 0)
     for _, jd := range jsonData {
         if jd.Custom_Domain != "" {
-            urls = append(urls, "http://" + jd.Slug + ".reboo.org")
+            urls = append(urls, "http://" + jd.Slug + ".bonde.org")
             customDomains = append(customDomains, jd.Custom_Domain)
         }
     }
