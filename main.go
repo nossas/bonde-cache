@@ -187,6 +187,7 @@ func main() {
         e.Pre(middleware.WWWRedirect())
         e.AutoTLSManager.HostPolicy = autocert.HostWhitelist(customDomains...)
         e.AutoTLSManager.Cache = autocert.DirCache("./cache/")
+        e.AutoTLSManager.Email = "tech@nossas.org"
 
         finish := make(chan bool)
         go func() {
