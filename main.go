@@ -99,9 +99,9 @@ func readCacheContent(urls[]string, customDomains[]string, db*bolt.DB)[]*HttpRes
             } else {
                 fmt.Errorf("error read response http: %s", err)
             }
-            time.Sleep(1e9)
             ch <- & HttpResponse { customDomains[i], resp, err }
         }(url, i)
+        time.Sleep(1e9)
     }
 
     for {
