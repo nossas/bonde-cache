@@ -72,6 +72,7 @@ func refreshCache(urls[]string, customDomains[]string, db*bolt.DB, interval stri
                     if (result.response != nil) {
                         fmt.Printf("%s status: %s\n", result.url, result.response.Status)
                     }
+                    time.Sleep(1e9)
                 }
             case <- quit:
                 ticker.Stop()
@@ -98,6 +99,7 @@ func readCacheContent(urls[]string, customDomains[]string, db*bolt.DB)[]*HttpRes
             } else {
                 fmt.Errorf("error read response http: %s", err)
             }
+            time.Sleep(1e9)
             ch <- & HttpResponse { customDomains[i], resp, err }
         }(url, i)
     }
