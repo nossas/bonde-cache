@@ -21,6 +21,7 @@ type Mobilization struct {
     Name string
     Slug string
     Custom_Domain string
+    UpdatedAt time.Time
 }
 
 type HttpResponse struct {
@@ -29,7 +30,7 @@ type HttpResponse struct {
     err error
 }
 
-func getUrls() (url[]string, customDomains[]string) {
+func getUrls() (customDomains[]string, mobs[]Mobilization) {
     var myClient = & http.Client { Timeout: 10 * time.Second }
     r, err := myClient.Get("https://api.bonde.org/mobilizations")
     if err != nil {
@@ -48,18 +49,18 @@ func getUrls() (url[]string, customDomains[]string) {
         panic(err)
     }
 
-    urls := make([]string, 0)
+    mobs = make([]Mobilization, 0)
     customDomains = make([]string, 0)
     for _, jd := range jsonData {
         if jd.Custom_Domain != "" {
-            urls = append(urls, "http://" + jd.Slug + ".bonde.org")
             customDomains = append(customDomains, jd.Custom_Domain)
+            mobs = append(mobs, jd)
         }
     }
-    return urls, customDomains
+    return customDomains, mobs
 }
 
-func refreshCache(urls[]string, customDomains[]string, db*bolt.DB, interval string)[]*HttpResponse {
+func refreshCache(mobs[]Mobilization, db*bolt.DB, interval string)[]*HttpResponse {
     i, _ := strconv.Atoi(interval)
     ticker := time.NewTicker(time.Duration(i) * time.Second)
     quit := make(chan struct{})
@@ -67,7 +68,7 @@ func refreshCache(urls[]string, customDomains[]string, db*bolt.DB, interval stri
         for {
            select {
             case <- ticker.C:
-                results := readCacheContent(urls, customDomains, db)
+                results := readCacheContent(mobs, db)
                 for _, result := range results {
                     if (result.response != nil) {
                         fmt.Printf("%s status: %s\n", result.url, result.response.Status)
@@ -83,24 +84,24 @@ func refreshCache(urls[]string, customDomains[]string, db*bolt.DB, interval stri
     return nil
 }
 
-func readCacheContent(urls[]string, customDomains[]string, db*bolt.DB)[]*HttpResponse {
-    ch := make(chan *HttpResponse, len(urls)) // buffered
+func readCacheContent(mobs[]Mobilization, db*bolt.DB)[]*HttpResponse {
+    ch := make(chan *HttpResponse, len(mobs)) // buffered
     responses := []* HttpResponse {}
 
-    for i, url := range urls {
-        go func(url string,i int) {
-            fmt.Printf("fetch url %s \n", customDomains[i])
+    for i, mob := range mobs {
+        go func(mob Mobilization,i int) {
+            fmt.Printf("fetch url %s \n", mob.Custom_Domain)
             var myClient = & http.Client { Timeout: 10 * time.Second }
-            resp, err := myClient.Get(url)
+            resp, err := myClient.Get("http://" + mob.Slug + ".bonde.org")
 
             // defer resp.Body.Close()
             if err == nil {
-                saveCacheContent(url, customDomains[i], resp, db)
+                saveCacheContent(mob, resp, db)
             } else {
                 fmt.Errorf("error read response http: %s", err)
             }
-            ch <- & HttpResponse { customDomains[i], resp, err }
-        }(url, i)
+            ch <- & HttpResponse { mob.Custom_Domain, resp, err }
+        }(mob, i)
         time.Sleep(1e9)
     }
 
@@ -109,7 +110,7 @@ func readCacheContent(urls[]string, customDomains[]string, db*bolt.DB)[]*HttpRes
             case r := <-ch:
                 fmt.Printf("fetched url %s\n", r.url)
                 responses = append(responses, r)
-                if len(responses) == len(urls) {
+                if len(responses) == len(mobs) {
                     return responses
                 }
             case <-time.After(50 * time.Millisecond):
@@ -120,7 +121,7 @@ func readCacheContent(urls[]string, customDomains[]string, db*bolt.DB)[]*HttpRes
     return responses
 }
 
-func saveCacheContent(url string, customDomain string, resp *http.Response, db *bolt.DB) {
+func saveCacheContent(mob Mobilization, resp *http.Response, db *bolt.DB) {
     body, err := ioutil.ReadAll(resp.Body)
 
     if err == nil {
@@ -129,8 +130,8 @@ func saveCacheContent(url string, customDomain string, resp *http.Response, db *
             if err != nil {
                 return fmt.Errorf("error create cache bucket: %s", err)
             }
-            b.Put([]byte(customDomain), body)
-            fmt.Printf("saved body content url %s \n", url)
+            b.Put([]byte(mob.Custom_Domain), body)
+            fmt.Printf("saved body content url %s \n", mob.Slug)
             return nil
         })
         if err != nil {
@@ -149,9 +150,9 @@ func main() {
         fmt.Errorf("open cache: %s", err)
     }
 
-    urls, customDomains := getUrls()
-    readCacheContent(urls, customDomains, db) // force first time build cache
-    refreshCache(urls, customDomains, db, os.Getenv("CACHE_INTERVAL"))
+    customDomains, mobs := getUrls()
+    readCacheContent(mobs, db) // force first time build cache
+    refreshCache(mobs, db, os.Getenv("CACHE_INTERVAL"))
 
     e := echo.New()
     e.Use(middleware.Logger())
