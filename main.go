@@ -19,6 +19,8 @@ import (
 type Mobilization struct {
 	ID            int
 	Name          string
+	Content       []byte
+	CachedAt      time.Time
 	Slug          string
 	Custom_Domain string
 	Updated_At    string
@@ -68,7 +70,7 @@ func refreshCache(mobs []Mobilization, db *bolt.DB) []*HttpResponse {
 		for {
 			select {
 			case <-ticker.C:
-				results := readCacheContent(mobs, db)
+				results := readCacheContent(mobs, db, false)
 				for _, result := range results {
 					if result.response != nil {
 						fmt.Printf("%s status: %s\n", result.url, result.response.Status)
@@ -84,14 +86,14 @@ func refreshCache(mobs []Mobilization, db *bolt.DB) []*HttpResponse {
 	return nil
 }
 
-func readCacheContent(mobs []Mobilization, db *bolt.DB) []*HttpResponse {
+func readCacheContent(mobs []Mobilization, db *bolt.DB, force bool) []*HttpResponse {
 	ch := make(chan *HttpResponse, len(mobs)) // buffered
 	responses := []*HttpResponse{}
 	interval, _ := strconv.ParseFloat(os.Getenv("CACHE_INTERVAL"), 64)
 
 	for i, mob := range mobs {
 		tUpdatedAt, _ := time.Parse("2006-01-02T15:04:05.000-07:00", mob.Updated_At)
-		if time.Now().Sub(tUpdatedAt).Minutes() <= interval {
+		if time.Now().Sub(tUpdatedAt).Minutes() <= interval || force {
 			go func(mob Mobilization, i int) {
 				fmt.Printf("fetch url %s \n", mob.Custom_Domain)
 				var myClient = &http.Client{Timeout: 10 * time.Second}
@@ -133,7 +135,14 @@ func saveCacheContent(mob Mobilization, resp *http.Response, db *bolt.DB) {
 			if err != nil {
 				fmt.Errorf("error create cache bucket: %s", err)
 			}
-			b.Put([]byte(mob.Custom_Domain), body)
+			mob.Content = body
+			mob.CachedAt = time.Now()
+			encoded, err := json.Marshal(mob)
+			if err != nil {
+				return err
+			}
+
+			b.Put([]byte(mob.Custom_Domain), encoded)
 			fmt.Printf("saved body content url %s \n", mob.Slug)
 			return nil
 		})
@@ -154,7 +163,7 @@ func main() {
 	}
 
 	customDomains, mobs := getUrls()
-	readCacheContent(mobs, db) // force first time build cache
+	readCacheContent(mobs, db, true) // force first time build cache
 	refreshCache(mobs, db)
 
 	e := echo.New()
@@ -172,7 +181,13 @@ func main() {
 		err := db.View(func(tx *bolt.Tx) error {
 			b := tx.Bucket([]byte("cached_urls"))
 			v := b.Get([]byte(host))
-			c.HTML(http.StatusOK, string(v))
+			var mob Mobilization
+			err := json.Unmarshal(v, &mob)
+			if err != nil {
+				return err
+			}
+
+			c.HTML(http.StatusOK, string(mob.Content)+"<!--"+mob.CachedAt.UTC().Format(time.RFC3339)+"-->")
 			return nil
 		})
 		if err != nil {
