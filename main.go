@@ -162,6 +162,18 @@ func main() {
 		fmt.Errorf("open cache: %s", err)
 	}
 
+	CustomHTTPErrorHandler := func(err error, c echo.Context) {
+		// code := http.StatusInternalServerError
+		// if he, ok := err.(*echo.HTTPError); ok {
+		// 	code = he.Code
+		// }
+
+		if err := c.File("error.html"); err != nil {
+			c.Logger().Error(err)
+		}
+		c.Logger().Error(err)
+	}
+
 	customDomains, mobs := getUrls()
 	readCacheContent(mobs, db, true) // force first time build cache
 	refreshCache(mobs, db)
@@ -171,6 +183,7 @@ func main() {
 	e.Use(middleware.Recover())
 	e.Use(middleware.GzipWithConfig(middleware.GzipConfig{Level: 2}))
 	e.Use(middleware.BodyLimit("1M"))
+	e.HTTPErrorHandler = CustomHTTPErrorHandler
 
 	e.GET("/", func(c echo.Context) error {
 		req := c.Request()
@@ -212,6 +225,7 @@ func main() {
 			ee.Pre(middleware.RemoveTrailingSlash())
 			ee.Pre(middleware.HTTPSWWWRedirect())
 			ee.Pre(middleware.HTTPSRedirect())
+			ee.HTTPErrorHandler = CustomHTTPErrorHandler
 			e.Logger.Fatal(ee.Start(":80"))
 		}()
 		go func() {
