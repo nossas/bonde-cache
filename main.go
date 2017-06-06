@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"time"
 
-	rice "github.com/GeertJohan/go.rice"
 	"github.com/boltdb/bolt"
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
@@ -22,7 +21,7 @@ type Mobilization struct {
 	Name          string
 	Slug          string
 	Custom_Domain string
-	UpdatedAt     time.Time
+	Updated_At    string
 }
 
 type HttpResponse struct {
@@ -61,9 +60,9 @@ func getUrls() (customDomains []string, mobs []Mobilization) {
 	return customDomains, mobs
 }
 
-func refreshCache(mobs []Mobilization, db *bolt.DB, interval string) []*HttpResponse {
-	i, _ := strconv.Atoi(interval)
-	ticker := time.NewTicker(time.Duration(i) * time.Second)
+func refreshCache(mobs []Mobilization, db *bolt.DB) []*HttpResponse {
+	interval, _ := strconv.Atoi(os.Getenv("CACHE_INTERVAL"))
+	ticker := time.NewTicker(time.Duration(interval) * time.Second)
 	quit := make(chan struct{})
 	go func() {
 		for {
@@ -85,29 +84,29 @@ func refreshCache(mobs []Mobilization, db *bolt.DB, interval string) []*HttpResp
 	return nil
 }
 
-func inTimeSpan(start, end, check time.Time) bool {
-	return check.After(start) && check.Before(end)
-}
-
 func readCacheContent(mobs []Mobilization, db *bolt.DB) []*HttpResponse {
 	ch := make(chan *HttpResponse, len(mobs)) // buffered
 	responses := []*HttpResponse{}
+	interval, _ := strconv.ParseFloat(os.Getenv("CACHE_INTERVAL"), 64)
 
 	for i, mob := range mobs {
-		go func(mob Mobilization, i int) {
-			fmt.Printf("fetch url %s \n", mob.Custom_Domain)
-			var myClient = &http.Client{Timeout: 10 * time.Second}
-			resp, err := myClient.Get("http://" + mob.Slug + ".bonde.org")
+		tUpdatedAt, _ := time.Parse("2006-01-02T15:04:05.000-07:00", mob.Updated_At)
+		if time.Now().Sub(tUpdatedAt).Minutes() <= interval {
+			go func(mob Mobilization, i int) {
+				fmt.Printf("fetch url %s \n", mob.Custom_Domain)
+				var myClient = &http.Client{Timeout: 10 * time.Second}
+				resp, err := myClient.Get("http://" + mob.Slug + ".bonde.org")
 
-			// defer resp.Body.Close()
-			if err == nil {
-				saveCacheContent(mob, resp, db)
-			} else {
-				fmt.Errorf("error read response http: %s", err)
-			}
-			ch <- &HttpResponse{mob.Custom_Domain, resp, err}
-		}(mob, i)
-		time.Sleep(1e9)
+				// defer resp.Body.Close()
+				if err == nil {
+					saveCacheContent(mob, resp, db)
+				} else {
+					fmt.Errorf("error read response http: %s", err)
+				}
+				ch <- &HttpResponse{mob.Custom_Domain, resp, err}
+			}(mob, i)
+			time.Sleep(1e9)
+		}
 	}
 
 	for {
@@ -115,9 +114,8 @@ func readCacheContent(mobs []Mobilization, db *bolt.DB) []*HttpResponse {
 		case r := <-ch:
 			fmt.Printf("fetched url %s\n", r.url)
 			responses = append(responses, r)
-			if len(responses) == len(mobs) {
-				return responses
-			}
+
+			return responses
 		case <-time.After(50 * time.Millisecond):
 			fmt.Printf(".")
 		}
@@ -157,17 +155,13 @@ func main() {
 
 	customDomains, mobs := getUrls()
 	readCacheContent(mobs, db) // force first time build cache
-	refreshCache(mobs, db, os.Getenv("CACHE_INTERVAL"))
+	refreshCache(mobs, db)
 
 	e := echo.New()
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 	e.Use(middleware.GzipWithConfig(middleware.GzipConfig{Level: 2}))
 	e.Use(middleware.BodyLimit("1M"))
-
-	assetHandler := http.FileServer(rice.MustFindBox("./public/").HTTPBox())
-	e.GET("/dist/*", echo.WrapHandler(assetHandler))
-	e.GET("/wysihtml/*", echo.WrapHandler(assetHandler))
 
 	e.GET("/", func(c echo.Context) error {
 		req := c.Request()
@@ -209,7 +203,7 @@ func main() {
 			e.Logger.Fatal(e.StartAutoTLS(":443"))
 		}()
 		<-finish
-
 	}
+
 	defer db.Close()
 }
