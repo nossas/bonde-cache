@@ -62,7 +62,7 @@ func getUrls() (customDomains []string, mobs []Mobilization) {
 	return customDomains, mobs
 }
 
-func refreshCache(mobs []Mobilization, db *bolt.DB) []*HttpResponse {
+func enqueueCache(mobs []Mobilization, db *bolt.DB, force bool) []*HttpResponse {
 	interval, _ := strconv.Atoi(os.Getenv("CACHE_INTERVAL"))
 	ticker := time.NewTicker(time.Duration(interval) * time.Second)
 	quit := make(chan struct{})
@@ -70,13 +70,7 @@ func refreshCache(mobs []Mobilization, db *bolt.DB) []*HttpResponse {
 		for {
 			select {
 			case <-ticker.C:
-				results := readCacheContent(mobs, db, false)
-				for _, result := range results {
-					if result.response != nil {
-						fmt.Printf("%s status: %s\n", result.url, result.response.Status)
-					}
-					time.Sleep(1e9)
-				}
+				refreshCache(mobs, db, force)
 			case <-quit:
 				ticker.Stop()
 				return
@@ -86,29 +80,40 @@ func refreshCache(mobs []Mobilization, db *bolt.DB) []*HttpResponse {
 	return nil
 }
 
-func readCacheContent(mobs []Mobilization, db *bolt.DB, force bool) []*HttpResponse {
-	ch := make(chan *HttpResponse, len(mobs)) // buffered
-	responses := []*HttpResponse{}
-	interval, _ := strconv.ParseFloat(os.Getenv("CACHE_INTERVAL"), 64)
-
-	for i, mob := range mobs {
-		tUpdatedAt, _ := time.Parse("2006-01-02T15:04:05.000-07:00", mob.Updated_At)
-		if time.Now().Sub(tUpdatedAt).Minutes() <= interval || force {
-			go func(mob Mobilization, i int) {
-				fmt.Printf("fetch url %s \n", mob.Custom_Domain)
-				var myClient = &http.Client{Timeout: 10 * time.Second}
-				resp, err := myClient.Get("http://" + mob.Slug + ".bonde.org")
-
-				// defer resp.Body.Close()
-				if err == nil {
-					saveCacheContent(mob, resp, db)
-				} else {
-					fmt.Errorf("error read response http: %s", err)
-				}
-				ch <- &HttpResponse{mob.Custom_Domain, resp, err}
-			}(mob, i)
+func refreshCache(mobs []Mobilization, db *bolt.DB, force bool) []*HttpResponse {
+	for _, mob := range mobs {
+		results := readCacheContent(mob, db, force)
+		for _, result := range results {
+			if result.response != nil {
+				fmt.Printf("%s status: %s\n", result.url, result.response.Status)
+			}
 			time.Sleep(1e9)
 		}
+	}
+	return nil
+}
+
+func readCacheContent(mob Mobilization, db *bolt.DB, force bool) []*HttpResponse {
+	ch := make(chan *HttpResponse, 1) // buffered
+	responses := []*HttpResponse{}
+	interval, _ := strconv.ParseFloat(os.Getenv("CACHE_INTERVAL"), 64)
+	tUpdatedAt, _ := time.Parse("2006-01-02T15:04:05.000-07:00", mob.Updated_At)
+
+	if time.Now().Sub(tUpdatedAt).Minutes() <= interval || force {
+		go func(mob Mobilization) {
+			fmt.Printf("fetch url %s \n", mob.Custom_Domain)
+			var myClient = &http.Client{Timeout: 10 * time.Second}
+			resp, err := myClient.Get("http://" + mob.Slug + ".bonde.org")
+
+			// defer resp.Body.Close()
+			if err == nil {
+				saveCacheContent(mob, resp, db)
+			} else {
+				fmt.Errorf("error read response http: %s", err)
+			}
+			ch <- &HttpResponse{mob.Custom_Domain, resp, err}
+		}(mob)
+		time.Sleep(1e9)
 	}
 
 	for {
@@ -175,8 +180,10 @@ func main() {
 	}
 
 	customDomains, mobs := getUrls()
-	readCacheContent(mobs, db, true) // force first time build cache
-	refreshCache(mobs, db)
+	if os.Getenv("RESET_CACHE") == "true" {
+		refreshCache(mobs, db, true) // force first time build cache
+	}
+	enqueueCache(mobs, db, false)
 
 	e := echo.New()
 	e.Use(middleware.Logger())
@@ -191,6 +198,7 @@ func main() {
 		if isdev {
 			host, _, _ = net.SplitHostPort(host)
 		}
+
 		err := db.View(func(tx *bolt.Tx) error {
 			b := tx.Bucket([]byte("cached_urls"))
 			v := b.Get([]byte(host))
@@ -198,6 +206,11 @@ func main() {
 			err := json.Unmarshal(v, &mob)
 			if err != nil {
 				return err
+			}
+
+			noCache := c.QueryParam("nocache")
+			if noCache == "1" {
+				readCacheContent(mob, db, true)
 			}
 
 			c.HTML(http.StatusOK, string(mob.Content)+"<!--"+mob.CachedAt.UTC().Format(time.RFC3339)+"-->")
