@@ -72,6 +72,11 @@ func enqueueCache(mobs []Mobilization, db *bolt.DB, force bool) []*HttpResponse 
 		for {
 			select {
 			case <-ticker.C:
+				customDomains, _ := getUrls()
+				if len(customDomains) > len(mobs) {
+					os.Exit(1)
+				}
+
 				refreshCache(mobs, db, force)
 			case <-quit:
 				ticker.Stop()
@@ -101,7 +106,7 @@ func readCacheContent(mob Mobilization, db *bolt.DB, force bool) []*HttpResponse
 	interval, _ := strconv.ParseFloat(os.Getenv("CACHE_INTERVAL"), 64)
 	tUpdatedAt, _ := time.Parse("2006-01-02T15:04:05.000-07:00", mob.Updated_At)
 
-	if time.Now().Sub(tUpdatedAt).Minutes() <= interval || force {
+	if time.Now().Sub(tUpdatedAt.UTC()).Seconds() <= interval*3.0 || force {
 		go func(mob Mobilization) {
 			fmt.Printf("fetch url %s \n", mob.Custom_Domain)
 			var myClient = &http.Client{Timeout: 10 * time.Second}
@@ -170,15 +175,20 @@ func main() {
 	}
 
 	CustomHTTPErrorHandler := func(err error, c echo.Context) {
+		req := c.Request()
+		host := req.Host
+
 		// code := http.StatusInternalServerError
 		// if he, ok := err.(*echo.HTTPError); ok {
 		// 	code = he.Code
 		// }
+
 		if err := c.File("error.html"); err != nil {
 			c.Logger().Error(err)
 		}
+
 		c.Logger().Error(err)
-		fmt.Println(err)
+		fmt.Println(err, host)
 	}
 
 	if os.Getenv("RESET_CACHE") == "true" {
