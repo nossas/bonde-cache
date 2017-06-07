@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
 	"time"
 
@@ -62,7 +64,7 @@ func getUrls() (customDomains []string, mobs []Mobilization) {
 	return customDomains, mobs
 }
 
-func refreshCache(mobs []Mobilization, db *bolt.DB) []*HttpResponse {
+func enqueueCache(mobs []Mobilization, db *bolt.DB, force bool) []*HttpResponse {
 	interval, _ := strconv.Atoi(os.Getenv("CACHE_INTERVAL"))
 	ticker := time.NewTicker(time.Duration(interval) * time.Second)
 	quit := make(chan struct{})
@@ -70,13 +72,7 @@ func refreshCache(mobs []Mobilization, db *bolt.DB) []*HttpResponse {
 		for {
 			select {
 			case <-ticker.C:
-				results := readCacheContent(mobs, db, false)
-				for _, result := range results {
-					if result.response != nil {
-						fmt.Printf("%s status: %s\n", result.url, result.response.Status)
-					}
-					time.Sleep(1e9)
-				}
+				refreshCache(mobs, db, force)
 			case <-quit:
 				ticker.Stop()
 				return
@@ -86,29 +82,40 @@ func refreshCache(mobs []Mobilization, db *bolt.DB) []*HttpResponse {
 	return nil
 }
 
-func readCacheContent(mobs []Mobilization, db *bolt.DB, force bool) []*HttpResponse {
-	ch := make(chan *HttpResponse, len(mobs)) // buffered
-	responses := []*HttpResponse{}
-	interval, _ := strconv.ParseFloat(os.Getenv("CACHE_INTERVAL"), 64)
-
-	for i, mob := range mobs {
-		tUpdatedAt, _ := time.Parse("2006-01-02T15:04:05.000-07:00", mob.Updated_At)
-		if time.Now().Sub(tUpdatedAt).Minutes() <= interval || force {
-			go func(mob Mobilization, i int) {
-				fmt.Printf("fetch url %s \n", mob.Custom_Domain)
-				var myClient = &http.Client{Timeout: 10 * time.Second}
-				resp, err := myClient.Get("http://" + mob.Slug + ".bonde.org")
-
-				// defer resp.Body.Close()
-				if err == nil {
-					saveCacheContent(mob, resp, db)
-				} else {
-					fmt.Errorf("error read response http: %s", err)
-				}
-				ch <- &HttpResponse{mob.Custom_Domain, resp, err}
-			}(mob, i)
+func refreshCache(mobs []Mobilization, db *bolt.DB, force bool) []*HttpResponse {
+	for _, mob := range mobs {
+		results := readCacheContent(mob, db, force)
+		for _, result := range results {
+			if result.response != nil {
+				fmt.Printf("%s status: %s\n", result.url, result.response.Status)
+			}
 			time.Sleep(1e9)
 		}
+	}
+	return nil
+}
+
+func readCacheContent(mob Mobilization, db *bolt.DB, force bool) []*HttpResponse {
+	ch := make(chan *HttpResponse, 1) // buffered
+	responses := []*HttpResponse{}
+	interval, _ := strconv.ParseFloat(os.Getenv("CACHE_INTERVAL"), 64)
+	tUpdatedAt, _ := time.Parse("2006-01-02T15:04:05.000-07:00", mob.Updated_At)
+
+	if time.Now().Sub(tUpdatedAt).Minutes() <= interval || force {
+		go func(mob Mobilization) {
+			fmt.Printf("fetch url %s \n", mob.Custom_Domain)
+			var myClient = &http.Client{Timeout: 10 * time.Second}
+			resp, err := myClient.Get("http://" + mob.Slug + ".bonde.org")
+
+			// defer resp.Body.Close()
+			if err == nil {
+				saveCacheContent(mob, resp, db)
+			} else {
+				fmt.Errorf("error read response http: %s", err)
+			}
+			ch <- &HttpResponse{mob.Custom_Domain, resp, err}
+		}(mob)
+		time.Sleep(1e9)
 	}
 
 	for {
@@ -116,10 +123,10 @@ func readCacheContent(mobs []Mobilization, db *bolt.DB, force bool) []*HttpRespo
 		case r := <-ch:
 			fmt.Printf("fetched url %s\n", r.url)
 			responses = append(responses, r)
-
 			return responses
 		case <-time.After(50 * time.Millisecond):
 			fmt.Printf(".")
+			return nil
 		}
 	}
 
@@ -167,72 +174,93 @@ func main() {
 		// if he, ok := err.(*echo.HTTPError); ok {
 		// 	code = he.Code
 		// }
-
 		if err := c.File("error.html"); err != nil {
 			c.Logger().Error(err)
 		}
 		c.Logger().Error(err)
+		fmt.Println(err)
 	}
 
-	customDomains, mobs := getUrls()
-	readCacheContent(mobs, db, true) // force first time build cache
-	refreshCache(mobs, db)
+	if os.Getenv("RESET_CACHE") == "true" {
+		_, mobs := getUrls()
+		refreshCache(mobs, db, true) // force first time build cache
+	}
 
+	finish := make(chan bool)
 	e := echo.New()
-	e.Use(middleware.Logger())
-	e.Use(middleware.Recover())
-	e.Use(middleware.GzipWithConfig(middleware.GzipConfig{Level: 2}))
-	e.Use(middleware.BodyLimit("1M"))
-	e.HTTPErrorHandler = CustomHTTPErrorHandler
-
-	e.GET("/", func(c echo.Context) error {
-		req := c.Request()
-		host := req.Host
-		if isdev {
-			host, _, _ = net.SplitHostPort(host)
-		}
-		err := db.View(func(tx *bolt.Tx) error {
-			b := tx.Bucket([]byte("cached_urls"))
-			v := b.Get([]byte(host))
-			var mob Mobilization
-			err := json.Unmarshal(v, &mob)
-			if err != nil {
-				return err
-			}
-
-			c.HTML(http.StatusOK, string(mob.Content)+"<!--"+mob.CachedAt.UTC().Format(time.RFC3339)+"-->")
-			return nil
-		})
-		if err != nil {
-			fmt.Errorf("%s", err)
-		}
-		return nil
-	})
-
-	if isdev {
-		e.Debug = true
-		e.Logger.Fatal(e.Start(":" + os.Getenv("PORT")))
-	} else {
-		e.Pre(middleware.RemoveTrailingSlash())
-		e.Pre(middleware.WWWRedirect())
-		e.AutoTLSManager.HostPolicy = autocert.HostWhitelist(customDomains...)
-		e.AutoTLSManager.Cache = autocert.DirCache("./cache/")
-		e.AutoTLSManager.Email = "tech@nossas.org"
-
-		finish := make(chan bool)
+	if !isdev {
 		go func() {
 			ee := echo.New()
 			ee.Pre(middleware.RemoveTrailingSlash())
 			ee.Pre(middleware.HTTPSWWWRedirect())
 			ee.Pre(middleware.HTTPSRedirect())
 			ee.HTTPErrorHandler = CustomHTTPErrorHandler
-			e.Logger.Fatal(ee.Start(":80"))
+			e.Logger.Fatal(ee.Start(":" + os.Getenv("PORT")))
 		}()
-		go func() {
-			e.Logger.Fatal(e.StartAutoTLS(":443"))
-		}()
-		<-finish
 	}
+	go func() {
+		customDomains, mobs := getUrls()
+		enqueueCache(mobs, db, false)
+
+		e.Use(middleware.Logger())
+		e.Use(middleware.Recover())
+		e.Use(middleware.GzipWithConfig(middleware.GzipConfig{Level: 2}))
+		e.Use(middleware.BodyLimit("1M"))
+		e.HTTPErrorHandler = CustomHTTPErrorHandler
+
+		e.GET("/", func(c echo.Context) error {
+			req := c.Request()
+			host := req.Host
+			if isdev {
+				host, _, _ = net.SplitHostPort(host)
+			}
+
+			err := db.View(func(tx *bolt.Tx) error {
+				b := tx.Bucket([]byte("cached_urls"))
+				v := b.Get([]byte(host))
+				var mob Mobilization
+				err := json.Unmarshal(v, &mob)
+				if err != nil {
+					return err
+				}
+
+				noCache := c.QueryParam("nocache")
+				if noCache == "1" {
+					readCacheContent(mob, db, true)
+				}
+
+				c.HTML(http.StatusOK, string(mob.Content)+"<!--"+mob.CachedAt.UTC().Format(time.RFC3339)+"-->")
+				return nil
+			})
+			if err != nil {
+				fmt.Errorf("%s", err)
+			}
+			return nil
+		})
+		e.Pre(middleware.RemoveTrailingSlash())
+		e.Pre(middleware.WWWRedirect())
+		if isdev {
+			e.Debug = true
+			e.Logger.Fatal(e.Start(":" + os.Getenv("PORT")))
+		} else {
+			e.AutoTLSManager.HostPolicy = autocert.HostWhitelist(customDomains...)
+			e.AutoTLSManager.Cache = autocert.DirCache("./cache/")
+			e.AutoTLSManager.Email = "tech@nossas.org"
+			e.Logger.Fatal(e.StartAutoTLS(":" + os.Getenv("PORT_SSL")))
+		}
+	}()
+	<-finish
 
 	defer db.Close()
+
+	// Wait for interrupt signal to gracefully shutdown the server with
+	// a timeout of 10 seconds.
+	quit := make(chan os.Signal)
+	signal.Notify(quit, os.Interrupt)
+	<-quit
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := e.Shutdown(ctx); err != nil {
+		e.Logger.Fatal(err)
+	}
 }
