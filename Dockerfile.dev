@@ -1,6 +1,6 @@
 FROM golang:onbuild
 
-ENV CACHE_INTERVAL 600
+ENV CACHE_INTERVAL 60
 
 RUN go get github.com/tools/godep
 RUN go get github.com/codegangsta/gin
