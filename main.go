@@ -1,14 +1,12 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
-	"os/signal"
 	"strconv"
 	"time"
 
@@ -38,19 +36,19 @@ func getUrls() (customDomains []string, mobs []Mobilization) {
 	var myClient = &http.Client{Timeout: 10 * time.Second}
 	r, err := myClient.Get("https://api.bonde.org/mobilizations")
 	if err != nil {
-		panic(err)
+		fmt.Println(err)
 	}
 	defer r.Body.Close()
 
 	jsonDataFromHTTP, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		panic(err)
+		fmt.Println(err)
 	}
 
 	var jsonData []Mobilization
 	err = json.Unmarshal([]byte(jsonDataFromHTTP), &jsonData) // here!
 	if err != nil {
-		panic(err)
+		fmt.Println(err)
 	}
 
 	mobs = make([]Mobilization, 0)
@@ -72,10 +70,10 @@ func enqueueCache(mobs []Mobilization, db *bolt.DB, force bool) []*HttpResponse 
 		for {
 			select {
 			case <-ticker.C:
-				customDomains, _ := getUrls()
-				if len(customDomains) > len(mobs) {
-					os.Exit(1)
-				}
+				// customDomains, _ := getUrls()
+				// if len(customDomains) > len(mobs) {
+				// 	os.Exit(1)
+				// }
 
 				refreshCache(mobs, db, force)
 			case <-quit:
@@ -165,6 +163,25 @@ func saveCacheContent(mob Mobilization, resp *http.Response, db *bolt.DB) {
 		fmt.Errorf("error read response body: %s", err)
 	}
 }
+
+// StartAutoTLS starts an HTTPS server using certificates automatically installed from https://letsencrypt.org.
+// func (e *Echo) MyStartAutoTLS(address string) error {
+// 	s := e.TLSServer
+// 	cfg := &tls.Config{
+// 		MinVersion:               tls.VersionTLS12,
+// 		CurvePreferences:         []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256},
+// 		PreferServerCipherSuites: true,
+// 		CipherSuites: []uint16{
+// 			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+// 			tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+// 			tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+// 			tls.TLS_RSA_WITH_AES_256_CBC_SHA,
+// 		},
+// 	}
+// 	s.TLSConfig = cfg
+// 	s.TLSConfig.GetCertificate = e.AutoTLSManager.GetCertificate
+// 	return e.startTLS(address)
+// }
 
 func main() {
 	isdev, err := strconv.ParseBool(os.Getenv("IS_DEV"))
@@ -256,6 +273,12 @@ func main() {
 			e.AutoTLSManager.HostPolicy = autocert.HostWhitelist(customDomains...)
 			e.AutoTLSManager.Cache = autocert.DirCache("./cache/")
 			e.AutoTLSManager.Email = "tech@nossas.org"
+			e.DisableHTTP2 = true
+			e.Use(middleware.SecureWithConfig(middleware.SecureConfig{
+				XFrameOptions:         "",
+				HSTSMaxAge:            3600,
+				ContentSecurityPolicy: "",
+			}))
 			e.Logger.Fatal(e.StartAutoTLS(":" + os.Getenv("PORT_SSL")))
 		}
 	}()
@@ -265,12 +288,12 @@ func main() {
 
 	// Wait for interrupt signal to gracefully shutdown the server with
 	// a timeout of 10 seconds.
-	quit := make(chan os.Signal)
-	signal.Notify(quit, os.Interrupt)
-	<-quit
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	if err := e.Shutdown(ctx); err != nil {
-		e.Logger.Fatal(err)
-	}
+	// quit := make(chan os.Signal)
+	// signal.Notify(quit, os.Interrupt)
+	// <-quit
+	// ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// defer cancel()
+	// if err := e.Shutdown(ctx); err != nil {
+	// 	e.Logger.Fatal(err)
+	// }
 }
