@@ -208,11 +208,6 @@ func main() {
 		fmt.Println(err, host)
 	}
 
-	if os.Getenv("RESET_CACHE") == "true" {
-		_, mobs := getUrls()
-		refreshCache(mobs, db, true) // force first time build cache
-	}
-
 	finish := make(chan bool)
 	e := echo.New()
 	if !isdev {
@@ -234,7 +229,12 @@ func main() {
 		e.Use(middleware.GzipWithConfig(middleware.GzipConfig{Level: 2}))
 		e.Use(middleware.BodyLimit("1M"))
 		e.HTTPErrorHandler = CustomHTTPErrorHandler
+		e.GET("/reset-all", func(c echo.Context) error {
+			_, mobs := getUrls()
+			refreshCache(mobs, db, true) // force first time build cache
 
+			return c.String(http.StatusOK, "Resetting cache")
+		})
 		e.GET("/", func(c echo.Context) error {
 			req := c.Request()
 			host := req.Host
@@ -273,6 +273,7 @@ func main() {
 			e.AutoTLSManager.HostPolicy = autocert.HostWhitelist(customDomains...)
 			e.AutoTLSManager.Cache = autocert.DirCache("./cache/")
 			e.AutoTLSManager.Email = "tech@nossas.org"
+			e.AutoTLSManager.ForceRSA = true
 			e.DisableHTTP2 = true
 			e.Use(middleware.SecureWithConfig(middleware.SecureConfig{
 				XFrameOptions:         "",
