@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -164,25 +165,6 @@ func saveCacheContent(mob Mobilization, resp *http.Response, db *bolt.DB) {
 	}
 }
 
-// StartAutoTLS starts an HTTPS server using certificates automatically installed from https://letsencrypt.org.
-// func (e *Echo) MyStartAutoTLS(address string) error {
-// 	s := e.TLSServer
-// 	cfg := &tls.Config{
-// 		MinVersion:               tls.VersionTLS12,
-// 		CurvePreferences:         []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256},
-// 		PreferServerCipherSuites: true,
-// 		CipherSuites: []uint16{
-// 			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-// 			tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-// 			tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
-// 			tls.TLS_RSA_WITH_AES_256_CBC_SHA,
-// 		},
-// 	}
-// 	s.TLSConfig = cfg
-// 	s.TLSConfig.GetCertificate = e.AutoTLSManager.GetCertificate
-// 	return e.startTLS(address)
-// }
-
 func main() {
 	isdev, err := strconv.ParseBool(os.Getenv("IS_DEV"))
 
@@ -277,10 +259,41 @@ func main() {
 			e.DisableHTTP2 = true
 			e.Use(middleware.SecureWithConfig(middleware.SecureConfig{
 				XFrameOptions:         "",
-				HSTSMaxAge:            3600,
+				HSTSMaxAge:            63072000,
 				ContentSecurityPolicy: "",
 			}))
-			e.Logger.Fatal(e.StartAutoTLS(":" + os.Getenv("PORT_SSL")))
+			s := e.TLSServer
+			cfg := &tls.Config{
+				// MinVersion:               tls.VersionTLS12,
+				// CurvePreferences:         []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256},
+				CurvePreferences: []tls.CurveID{
+					tls.CurveP256,
+					tls.X25519,
+				},
+				PreferServerCipherSuites: true,
+				// CipherSuites: []uint16{
+				// 	tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+				// 	tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+				// 	tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+				// 	tls.TLS_RSA_WITH_AES_256_CBC_SHA,
+				// or
+				//  tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+				//  tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+				//  tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305, // Go 1.8 only
+				//  tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,   // Go 1.8 only
+				//  tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+				//  tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+
+				// Best disabled, as they don't provide Forward Secrecy,
+				// but might be necessary for some clients
+				//  tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+				//  tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
+				// },
+			}
+			s.TLSConfig = cfg
+			s.TLSConfig.GetCertificate = e.AutoTLSManager.GetCertificate
+			s.Addr = ":" + os.Getenv("PORT_SSL")
+			e.Logger.Fatal(e.StartServer(e.TLSServer))
 		}
 	}()
 	<-finish
