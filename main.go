@@ -63,29 +63,6 @@ func getUrls() (customDomains []string, mobs []Mobilization) {
 	return customDomains, mobs
 }
 
-func enqueueCache(mobs []Mobilization, db *bolt.DB, force bool) []*HttpResponse {
-	interval, _ := strconv.Atoi(os.Getenv("CACHE_INTERVAL"))
-	ticker := time.NewTicker(time.Duration(interval) * time.Second)
-	quit := make(chan struct{})
-	go func() {
-		for {
-			select {
-			case <-ticker.C:
-				// customDomains, _ := getUrls()
-				// if len(customDomains) > len(mobs) {
-				// 	os.Exit(1)
-				// }
-
-				refreshCache(mobs, db, force)
-			case <-quit:
-				ticker.Stop()
-				return
-			}
-		}
-	}()
-	return nil
-}
-
 func refreshCache(mobs []Mobilization, db *bolt.DB, force bool) []*HttpResponse {
 	for _, mob := range mobs {
 		results := readCacheContent(mob, db, force)
@@ -105,9 +82,8 @@ func readCacheContent(mob Mobilization, db *bolt.DB, force bool) []*HttpResponse
 	interval, _ := strconv.ParseFloat(os.Getenv("CACHE_INTERVAL"), 64)
 	tUpdatedAt, _ := time.Parse("2006-01-02T15:04:05.000-07:00", mob.Updated_At)
 
-	if time.Now().Sub(tUpdatedAt.UTC()).Seconds() <= interval*3.0 || force {
+	if time.Now().Sub(tUpdatedAt).Seconds() <= interval*3.0 || force {
 		go func(mob Mobilization) {
-			fmt.Printf("fetch url %s \n", mob.Custom_Domain)
 			var myClient = &http.Client{Timeout: 10 * time.Second}
 			resp, err := myClient.Get("http://" + mob.Slug + ".bonde.org")
 
@@ -125,7 +101,6 @@ func readCacheContent(mob Mobilization, db *bolt.DB, force bool) []*HttpResponse
 	for {
 		select {
 		case r := <-ch:
-			fmt.Printf("fetched url %s\n", r.url)
 			responses = append(responses, r)
 			return responses
 		case <-time.After(50 * time.Millisecond):
@@ -134,7 +109,7 @@ func readCacheContent(mob Mobilization, db *bolt.DB, force bool) []*HttpResponse
 		}
 	}
 
-	return responses
+	// return responses
 }
 
 func saveCacheContent(mob Mobilization, resp *http.Response, db *bolt.DB) {
@@ -154,7 +129,7 @@ func saveCacheContent(mob Mobilization, resp *http.Response, db *bolt.DB) {
 			}
 
 			b.Put([]byte(mob.Custom_Domain), encoded)
-			fmt.Printf("saved body content url %s \n", mob.Slug)
+			fmt.Printf("\nWorker: Content from slug %s will be served as %s\n", mob.Slug, mob.Custom_Domain)
 			return nil
 		})
 		if err != nil {
@@ -163,6 +138,34 @@ func saveCacheContent(mob Mobilization, resp *http.Response, db *bolt.DB) {
 	} else {
 		fmt.Errorf("error read response body: %s", err)
 	}
+}
+
+func worker(done chan bool, db *bolt.DB) {
+	interval, _ := strconv.Atoi(os.Getenv("CACHE_INTERVAL"))
+	ticker := time.NewTicker(time.Duration(interval) * time.Second)
+	quit := make(chan struct{})
+	fmt.Print("Worker is up! \n")
+
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				_, mobs := getUrls()
+				// if len(customDomains) > len(mobs) {
+				//  err := p.Signal(os.Interrupt)
+				// 	os.Exit(1)
+				// }
+
+				refreshCache(mobs, db, false)
+			case <-quit:
+				ticker.Stop()
+				// done <- true
+				// return
+			}
+		}
+	}()
+
+	done <- true
 }
 
 func main() {
@@ -191,7 +194,9 @@ func main() {
 	}
 
 	finish := make(chan bool)
-	e := echo.New()
+	customDomains, _ := getUrls()
+	// enqueueCache(mobs, db, false)
+
 	if !isdev {
 		go func() {
 			ee := echo.New()
@@ -199,13 +204,16 @@ func main() {
 			ee.Pre(middleware.HTTPSWWWRedirect())
 			ee.Pre(middleware.HTTPSRedirect())
 			ee.HTTPErrorHandler = CustomHTTPErrorHandler
-			e.Logger.Fatal(ee.Start(":" + os.Getenv("PORT")))
+
+			if err := ee.Start(":" + os.Getenv("PORT")); err != nil {
+				ee.Logger.Info("Server Redirect: DOWN")
+			} else {
+				ee.Logger.Info("Server Redirect: UP")
+			}
 		}()
 	}
-	go func() {
-		customDomains, mobs := getUrls()
-		enqueueCache(mobs, db, false)
-
+	go func(customDomains []string) {
+		e := echo.New()
 		e.Use(middleware.Logger())
 		e.Use(middleware.Recover())
 		e.Use(middleware.GzipWithConfig(middleware.GzipConfig{Level: 2}))
@@ -238,7 +246,7 @@ func main() {
 					readCacheContent(mob, db, true)
 				}
 
-				c.HTML(http.StatusOK, string(mob.Content)+"<!--"+mob.CachedAt.UTC().Format(time.RFC3339)+"-->")
+				c.HTML(http.StatusOK, string(mob.Content)+"<!--"+mob.CachedAt.Format(time.RFC3339)+"-->")
 				return nil
 			})
 			if err != nil {
@@ -264,50 +272,27 @@ func main() {
 			}))
 			s := e.TLSServer
 			cfg := &tls.Config{
-				// MinVersion:               tls.VersionTLS12,
-				// CurvePreferences:         []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256},
 				CurvePreferences: []tls.CurveID{
 					tls.CurveP256,
 					tls.X25519,
 				},
 				PreferServerCipherSuites: true,
-				CipherSuites: []uint16{
-					// 	tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-					// 	tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-					// 	tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
-					// 	tls.TLS_RSA_WITH_AES_256_CBC_SHA,
-					// or
-					tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-					tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-					tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305, // Go 1.8 only
-					tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,   // Go 1.8 only
-					tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-					tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-
-					// Best disabled, as they don't provide Forward Secrecy,
-					// but might be necessary for some clients
-					tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
-					tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
-				},
 			}
 			s.TLSConfig = cfg
 			s.TLSConfig.GetCertificate = e.AutoTLSManager.GetCertificate
 			s.Addr = ":" + os.Getenv("PORT_SSL")
-			e.Logger.Fatal(e.StartServer(e.TLSServer))
+			if err := e.StartServer(e.TLSServer); err != nil {
+				e.Logger.Info("Server Cache: DOWN")
+			} else {
+				e.Logger.Info("Server Cache: UP")
+			}
 		}
-	}()
+	}(customDomains)
+
+	done := make(chan bool, 1)
+	go worker(done, db)
+	<-done
+
 	<-finish
-
-	defer db.Close()
-
-	// Wait for interrupt signal to gracefully shutdown the server with
-	// a timeout of 10 seconds.
-	// quit := make(chan os.Signal)
-	// signal.Notify(quit, os.Interrupt)
-	// <-quit
-	// ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	// defer cancel()
-	// if err := e.Shutdown(ctx); err != nil {
-	// 	e.Logger.Fatal(err)
-	// }
+	// defer db.Close()
 }
