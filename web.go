@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/boltdb/bolt"
+	"github.com/facebookgo/grace/gracehttp"
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
 	"golang.org/x/crypto/acme/autocert"
@@ -22,12 +23,14 @@ func ServerRedirect() {
 	ee.Pre(middleware.HTTPSWWWRedirect())
 	ee.Pre(middleware.HTTPSRedirect())
 	ee.HTTPErrorHandler = CustomHTTPErrorHandler
+	ee.Server.Addr = ":" + os.Getenv("PORT")
+	ee.Logger.Fatal(gracehttp.Serve(ee.Server))
 
-	if err := ee.Start(":" + os.Getenv("PORT")); err != nil {
-		ee.Logger.Info("Server Redirect: DOWN")
-	} else {
-		ee.Logger.Info("Server Redirect: UP")
-	}
+	// if err := ee.Start(":" + os.Getenv("PORT")); err != nil {
+	// 	ee.Logger.Info("Server Redirect: DOWN")
+	// } else {
+	// 	ee.Logger.Info("Server Redirect: UP")
+	// }
 }
 
 // Handle HTTPS Certificates
@@ -81,7 +84,8 @@ func ServerCache(db *bolt.DB, isdev bool) {
 	})
 	if isdev {
 		e.Debug = true
-		e.Logger.Fatal(e.Start(":" + os.Getenv("PORT")))
+		e.Server.Addr = ":" + os.Getenv("PORT")
+		e.Logger.Fatal(gracehttp.Serve(e.Server))
 	} else {
 		e.AutoTLSManager.HostPolicy = autocert.HostWhitelist(customDomains...)
 		e.AutoTLSManager.Cache = autocert.DirCache("./cache/")
@@ -104,11 +108,13 @@ func ServerCache(db *bolt.DB, isdev bool) {
 		s.TLSConfig = cfg
 		s.TLSConfig.GetCertificate = e.AutoTLSManager.GetCertificate
 		s.Addr = ":" + os.Getenv("PORT_SSL")
-		if err := e.StartServer(e.TLSServer); err != nil {
-			e.Logger.Info("Server Cache: DOWN")
-		} else {
-			e.Logger.Info("Server Cache: UP")
-		}
+		e.Logger.Fatal(gracehttp.Serve(e.Server))
+
+		// if err := e.StartServer(e.TLSServer); err != nil {
+		// 	e.Logger.Info("Server Cache: DOWN")
+		// } else {
+		// 	e.Logger.Info("Server Cache: UP")
+		// }
 	}
 }
 
