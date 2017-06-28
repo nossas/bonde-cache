@@ -4,21 +4,9 @@
 	"GodepVersion": "v79",
 	"Deps": [
 		{
-			"ImportPath": "github.com/GeertJohan/go.rice",
-			"Rev": "4bbccbfa39e784796e483270451217d3369ecfbe"
-		},
-		{
-			"ImportPath": "github.com/GeertJohan/go.rice/embedded",
-			"Rev": "4bbccbfa39e784796e483270451217d3369ecfbe"
-		},
-		{
 			"ImportPath": "github.com/boltdb/bolt",
 			"Comment": "v1.3.0-58-ge9cf4fa",
 			"Rev": "e9cf4fae01b5a8ff89d0ec6b32f0d9c9f79aefdd"
-		},
-		{
-			"ImportPath": "github.com/daaku/go.zipexe",
-			"Rev": "a5fe2436ffcb3236e175e5149162b41cd28bd27d"
 		},
 		{
 			"ImportPath": "github.com/dgrijalva/jwt-go",
@@ -26,8 +14,24 @@
 			"Rev": "2268707a8f0843315e2004ee4f1d021dc08baedf"
 		},
 		{
-			"ImportPath": "github.com/kardianos/osext",
-			"Rev": "9d302b58e975387d0b4d9be876622c86cefe64be"
+			"ImportPath": "github.com/facebookgo/clock",
+			"Rev": "600d898af40aa09a7a93ecb9265d87b0504b6f03"
+		},
+		{
+			"ImportPath": "github.com/facebookgo/grace/gracehttp",
+			"Rev": "4afe952a37a495ae4ac0c1d4ce5f66e91058d149"
+		},
+		{
+			"ImportPath": "github.com/facebookgo/grace/gracenet",
+			"Rev": "4afe952a37a495ae4ac0c1d4ce5f66e91058d149"
+		},
+		{
+			"ImportPath": "github.com/facebookgo/httpdown",
+			"Rev": "a3b1354551a26449fbe05f5d855937f6e7acbd71"
+		},
+		{
+			"ImportPath": "github.com/facebookgo/stats",
+			"Rev": "1b76add642e42c6ffba7211ad7b3939ce654526e"
 		},
 		{
 			"ImportPath": "github.com/labstack/echo",
@@ -91,14 +95,6 @@
 		},
 		{
 			"ImportPath": "golang.org/x/net/context/ctxhttp",
-			"Rev": "ffcf1bedda3b04ebb15a168a59800a73d6dc0f4d"
-		},
-		{
-			"ImportPath": "golang.org/x/net/html",
-			"Rev": "ffcf1bedda3b04ebb15a168a59800a73d6dc0f4d"
-		},
-		{
-			"ImportPath": "golang.org/x/net/html/atom",
 			"Rev": "ffcf1bedda3b04ebb15a168a59800a73d6dc0f4d"
 		},
 		{
