@@ -25,16 +25,26 @@ func Worker(done chan bool, db *bolt.DB) {
 			select {
 			case <-ticker.C:
 				_, mobs := GetUrls()
-				// if len(customDomains) > len(mobs) {
-				//  err := p.Signal(os.Interrupt)
-				// 	os.Exit(1)
-				// }
+				for _, mob := range mobs {
+					db.View(func(tx *bolt.Tx) error {
+						b := tx.Bucket([]byte("cached_urls"))
+						v := b.Get([]byte(mob.CustomDomain))
+
+						if string(v) == "" {
+							fmt.Printf("New domain created %s to %s at %s.\n", mob.CustomDomain, mob.Slug, mob.UpdatedAt)
+							readCacheContent(mob, db, true)
+							// os.Exit(1)
+							// err := p.Signal(os.Interrupt)
+						}
+						return nil
+					})
+				}
 
 				refreshCache(mobs, db, false)
 			case <-quit:
 				ticker.Stop()
 				// done <- true
-				// return
+				return
 			}
 		}
 	}()
@@ -151,7 +161,7 @@ func saveCacheContent(mob Mobilization, resp *http.Response, db *bolt.DB) {
 			}
 
 			b.Put([]byte(mob.CustomDomain), encoded)
-			fmt.Printf("\nWorker: Content from slug %s will be served as %s\n", mob.Slug, mob.CustomDomain)
+			fmt.Printf("\nWorker: [cached in %s] from www.%s.bonde.org and served at %s \n", mob.CachedAt, mob.Slug, mob.CustomDomain)
 			return nil
 		})
 		if err != nil {
