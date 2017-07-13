@@ -12,9 +12,8 @@ Bonde Cache
 10. verificar se a requisição voltar vazia e não sobrescrever cache
 ```
 docker build -t nossas/bonde-cache .
-docker run -it --rm -p 3000:3000 -v "$PWD":/go/src/app -w /go/src/app -e PORT=80 -e PORT_SSL=443 -e IS_DEV=false -e CACHE_INTERVAL=60 -e RESET_CACHE=false --name bonde-cache-app nossas/bonde-cache
+docker run -it --rm -p 3000:3000 -v "$PWD":/go/src/app -w /go/src/app -e PORT=80 -e CACHE_PORT=80 -e CACHE_PORTSSL=443 -e CACHE_DEV=false -e CACHE_INTERVAL=60 -e CACHE_RESET=false --name bonde-cache-app nossas/bonde-cache
 
 # dev mode with proxy to 3000 to enable auto builds
 docker build -f Dockerfile.dev -t nossas/bonde-cache .
-docker run -it --rm -p 3000:3000 -v "$PWD":/go/src/app -w /go/src/app -e PORT=3002 -e PORT_SSL=3001 -e IS_DEV=true -e CACHE_INTERVAL=60  -e RESET_CACHE=false --name bonde-cache-app nossas/bonde-cache gin 
-```
+docker run -it --rm -p 3000:3000 -v "$PWD":/go/src/app -w /go/src/app -e CACHE_PORT=3001 -e PORT=3001 -e CACHE_PORTSSL=443 -e CACHE_DEV=true -e CACHE_INTERVAL=20 -e CACHE_RESET=false --name bonde-cache-app nossas/bonde-cache```

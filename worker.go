@@ -6,17 +6,14 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
-	"os"
-	"strconv"
 	"time"
 
 	"github.com/boltdb/bolt"
 )
 
 // Worker enquee refresh cache to run between intervals
-func Worker(done chan bool, db *bolt.DB) {
-	interval, _ := strconv.Atoi(os.Getenv("CACHE_INTERVAL"))
-	ticker := time.NewTicker(time.Duration(interval) * time.Second)
+func Worker(done chan bool, db *bolt.DB, s Specification) {
+	ticker := time.NewTicker(time.Duration(s.Interval) * time.Second)
 	quit := make(chan struct{})
 	fmt.Print("Worker is up! \n")
 
@@ -32,7 +29,7 @@ func Worker(done chan bool, db *bolt.DB) {
 
 						if string(v) == "" {
 							fmt.Printf("New domain created %s to %s at %s.\n", mob.CustomDomain, mob.Slug, mob.UpdatedAt)
-							readCacheContent(mob, db, true)
+							readCacheContent(mob, db, s)
 							// os.Exit(1)
 							// err := p.Signal(os.Interrupt)
 						}
@@ -40,7 +37,7 @@ func Worker(done chan bool, db *bolt.DB) {
 					})
 				}
 
-				refreshCache(mobs, db, false)
+				refreshCache(mobs, db, s)
 			case <-quit:
 				ticker.Stop()
 				// done <- true
@@ -52,18 +49,19 @@ func Worker(done chan bool, db *bolt.DB) {
 	done <- true
 }
 
+var netTransport = &http.Transport{
+	Dial: (&net.Dialer{
+		Timeout: 5 * time.Second,
+	}).Dial,
+	TLSHandshakeTimeout: 5 * time.Second,
+}
+var netClient = &http.Client{
+	Timeout:   time.Second * 10,
+	Transport: netTransport,
+}
+
 // GetUrls serach to domains we must allow to be served
 func GetUrls() (customDomains []string, mobs []Mobilization) {
-	var netTransport = &http.Transport{
-		Dial: (&net.Dialer{
-			Timeout: 5 * time.Second,
-		}).Dial,
-		TLSHandshakeTimeout: 5 * time.Second,
-	}
-	var netClient = &http.Client{
-		Timeout:   time.Second * 10,
-		Transport: netTransport,
-	}
 	var jsonData []Mobilization
 
 	var r, _ = netClient.Get("https://api.bonde.org/mobilizations")
@@ -80,14 +78,13 @@ func GetUrls() (customDomains []string, mobs []Mobilization) {
 			customDomains = append(customDomains, jd.CustomDomain)
 			mobs = append(mobs, jd)
 		}
-		// fmt.Println(jd.UpdatedAt)
 	}
 	return customDomains, mobs
 }
 
-func refreshCache(mobs []Mobilization, db *bolt.DB, force bool) []*HttpResponse {
+func refreshCache(mobs []Mobilization, db *bolt.DB, s Specification) []*HttpResponse {
 	for _, mob := range mobs {
-		results := readCacheContent(mob, db, force)
+		results := readCacheContent(mob, db, s)
 		for _, result := range results {
 			if result.response != nil {
 				fmt.Printf("%s status: %s\n", result.url, result.response.Status)
@@ -98,25 +95,14 @@ func refreshCache(mobs []Mobilization, db *bolt.DB, force bool) []*HttpResponse 
 	return nil
 }
 
-func readCacheContent(mob Mobilization, db *bolt.DB, force bool) []*HttpResponse {
+func readCacheContent(mob Mobilization, db *bolt.DB, s Specification) []*HttpResponse {
 	ch := make(chan *HttpResponse, 1) // buffered
 	responses := []*HttpResponse{}
-	interval, _ := strconv.ParseFloat(os.Getenv("CACHE_INTERVAL"), 64)
 
 	// fmt.Printf("Checking if %s || %s <= %f \n", time.Now().Format("2006-01-02T15:04:05.000-07:00"), mob.UpdatedAt, interval*3.0)
 	tUpdatedAt, _ := time.Parse("2006-01-02T15:04:05.000-07:00", mob.UpdatedAt)
-	if time.Now().Sub(tUpdatedAt).Seconds() <= interval*3.0 || force {
+	if time.Now().Sub(tUpdatedAt).Seconds() <= s.Interval*3.0 || s.Reset {
 		go func(mob Mobilization) {
-			var netTransport = &http.Transport{
-				Dial: (&net.Dialer{
-					Timeout: 5 * time.Second,
-				}).Dial,
-				TLSHandshakeTimeout: 5 * time.Second,
-			}
-			var netClient = &http.Client{
-				Timeout:   time.Second * 10,
-				Transport: netTransport,
-			}
 			resp, err := netClient.Get("http://" + mob.Slug + ".bonde.org")
 			// defer resp.Body.Close()
 

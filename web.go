@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/boltdb/bolt"
@@ -17,15 +16,14 @@ import (
 )
 
 // Handle Redirect to HTTPS
-func ServerRedirect() {
+func ServerRedirect(s Specification) {
 	ee := echo.New()
 	ee.Pre(middleware.RemoveTrailingSlash())
 	ee.Pre(middleware.HTTPSWWWRedirect())
 	ee.Pre(middleware.HTTPSRedirect())
 	ee.HTTPErrorHandler = CustomHTTPErrorHandler
-	ee.Server.Addr = ":" + os.Getenv("PORT")
+	ee.Server.Addr = ":" + s.Port
 	ee.Logger.Fatal(gracehttp.Serve(ee.Server))
-
 	// if err := ee.Start(":" + os.Getenv("PORT")); err != nil {
 	// 	ee.Logger.Info("Server Redirect: DOWN")
 	// } else {
@@ -34,7 +32,7 @@ func ServerRedirect() {
 }
 
 // Handle HTTPS Certificates
-func ServerCache(db *bolt.DB, isdev bool) {
+func ServerCache(db *bolt.DB, spec Specification) {
 	customDomains, _ := GetUrls()
 
 	e := echo.New()
@@ -48,7 +46,7 @@ func ServerCache(db *bolt.DB, isdev bool) {
 
 	e.GET("/reset-all", func(c echo.Context) error {
 		_, mobs := GetUrls()
-		refreshCache(mobs, db, true) // force first time build cache
+		refreshCache(mobs, db, spec) // force first time build cache
 
 		return c.String(http.StatusOK, "Resetting cache")
 	})
@@ -56,7 +54,7 @@ func ServerCache(db *bolt.DB, isdev bool) {
 	e.GET("/", func(c echo.Context) error {
 		req := c.Request()
 		host := req.Host
-		if isdev {
+		if spec.Dev {
 			host, _, _ = net.SplitHostPort(host)
 		}
 
@@ -71,20 +69,20 @@ func ServerCache(db *bolt.DB, isdev bool) {
 
 			noCache := c.QueryParam("nocache")
 			if noCache == "1" {
-				readCacheContent(mob, db, true)
+				readCacheContent(mob, db, spec)
 			}
 
 			c.HTML(http.StatusOK, string(mob.Content)+"<!--"+mob.CachedAt.Format(time.RFC3339)+"-->")
 			return nil
 		})
 		if err != nil {
-			fmt.Errorf("%s", err)
+			return fmt.Errorf("%s", err)
 		}
 		return nil
 	})
-	if isdev {
+	if spec.Dev {
 		e.Debug = true
-		e.Server.Addr = ":" + os.Getenv("PORT")
+		e.Server.Addr = ":" + spec.Port
 		e.Logger.Fatal(gracehttp.Serve(e.Server))
 	} else {
 		e.AutoTLSManager.HostPolicy = autocert.HostWhitelist(customDomains...)
@@ -107,7 +105,7 @@ func ServerCache(db *bolt.DB, isdev bool) {
 		}
 		s.TLSConfig = cfg
 		s.TLSConfig.GetCertificate = e.AutoTLSManager.GetCertificate
-		s.Addr = ":" + os.Getenv("PORT_SSL")
+		s.Addr = ":" + spec.PortSsl
 		e.Logger.Fatal(gracehttp.Serve(e.Server))
 
 		// if err := e.StartServer(e.TLSServer); err != nil {

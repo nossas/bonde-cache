@@ -2,12 +2,12 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/http"
-	"os"
-	"strconv"
 	"time"
 
 	"github.com/boltdb/bolt"
+	"github.com/kelseyhightower/envconfig"
 )
 
 type Mobilization struct {
@@ -26,26 +26,39 @@ type HttpResponse struct {
 	err      error
 }
 
+type Specification struct {
+	Dev      bool
+	Reset    bool
+	Interval float64
+	Port     string
+	PortSsl  string
+}
+
 func main() {
-	isdev, err := strconv.ParseBool(os.Getenv("IS_DEV"))
-	finish := make(chan bool)
-	done := make(chan bool, 1)
+	var s Specification
+	err := envconfig.Process("cache", &s)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
 
 	db, err := bolt.Open("bonde-cache.db", 0600, nil)
 	if err != nil {
 		fmt.Errorf("open cache: %s", err)
 	}
 
-	if os.Getenv("RESET_CACHE") == "true" {
+	finish := make(chan bool)
+	done := make(chan bool, 1)
+
+	if s.Reset {
 		_, mobs := GetUrls()
-		refreshCache(mobs, db, true) // force first time build cache
+		refreshCache(mobs, db, s) // force first time build cache
 	}
 
-	if !isdev {
-		go ServerRedirect()
+	if !s.Dev {
+		go ServerRedirect(s)
 	}
-	go ServerCache(db, isdev)
-	go Worker(finish, db)
+	go ServerCache(db, s)
+	go Worker(finish, db, s)
 	<-done
 
 	<-finish
