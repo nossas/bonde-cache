@@ -34,6 +34,11 @@
 			"Rev": "1b76add642e42c6ffba7211ad7b3939ce654526e"
 		},
 		{
+			"ImportPath": "github.com/kelseyhightower/envconfig",
+			"Comment": "v1.3.0-6-g70f0258",
+			"Rev": "70f0258d44cbaa3b6a2581d82f58da01a38e4de4"
+		},
+		{
 			"ImportPath": "github.com/labstack/echo",
 			"Comment": "v3.1.0-rc.1-25-g22012e0",
 			"Rev": "22012e0e9da962b1b6a67b9e009d8eabe35d2d7e"
