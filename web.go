@@ -24,6 +24,7 @@ func ServerRedirect(s Specification) {
 	ee.HTTPErrorHandler = CustomHTTPErrorHandler
 	ee.Server.Addr = ":" + s.Port
 	ee.Logger.Fatal(gracehttp.Serve(ee.Server))
+	// gracehttp.SetLogger(ee.Logger)
 	// if err := ee.Start(":" + os.Getenv("PORT")); err != nil {
 	// 	ee.Logger.Info("Server Redirect: DOWN")
 	// } else {
@@ -84,6 +85,7 @@ func ServerCache(db *bolt.DB, spec Specification) {
 		e.Debug = true
 		e.Server.Addr = ":" + spec.Port
 		e.Logger.Fatal(gracehttp.Serve(e.Server))
+		// gracehttp.SetLogger(e.Logger)
 	} else {
 		e.AutoTLSManager.HostPolicy = autocert.HostWhitelist(customDomains...)
 		e.AutoTLSManager.Cache = autocert.DirCache("./cache/")

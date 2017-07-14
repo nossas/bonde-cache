@@ -6,6 +6,8 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"os"
+	"syscall"
 	"time"
 
 	"github.com/boltdb/bolt"
@@ -15,7 +17,7 @@ import (
 func Worker(done chan bool, db *bolt.DB, s Specification) {
 	ticker := time.NewTicker(time.Duration(s.Interval) * time.Second)
 	quit := make(chan struct{})
-	fmt.Print("Worker is up! \n")
+	fmt.Print("[worker] job started \n")
 
 	go func() {
 		for {
@@ -28,15 +30,21 @@ func Worker(done chan bool, db *bolt.DB, s Specification) {
 						v := b.Get([]byte(mob.CustomDomain))
 
 						if string(v) == "" {
-							fmt.Printf("New domain created %s to %s at %s.\n", mob.CustomDomain, mob.Slug, mob.UpdatedAt)
+							fmt.Printf("\n[worker] domain %s not found at cache. Slug %s update at %s.\n", mob.CustomDomain, mob.Slug, mob.UpdatedAt)
+							s.Reset = true
 							readCacheContent(mob, db, s)
-							// os.Exit(1)
-							// err := p.Signal(os.Interrupt)
+							time.Sleep(5 * time.Second)
+							pid := os.Getpid()
+							proc, err := os.FindProcess(pid)
+							if err != nil {
+								fmt.Println(err)
+							}
+							proc.Signal(syscall.SIGUSR2)
 						}
 						return nil
 					})
 				}
-
+				s.Reset = false
 				refreshCache(mobs, db, s)
 			case <-quit:
 				ticker.Stop()
@@ -87,7 +95,7 @@ func refreshCache(mobs []Mobilization, db *bolt.DB, s Specification) []*HttpResp
 		results := readCacheContent(mob, db, s)
 		for _, result := range results {
 			if result.response != nil {
-				fmt.Printf("%s status: %s\n", result.url, result.response.Status)
+				fmt.Printf("\n[worker] updated cache to %s, http status code: %s\n", result.url, result.response.Status)
 			}
 			time.Sleep(1e9)
 		}
@@ -147,7 +155,7 @@ func saveCacheContent(mob Mobilization, resp *http.Response, db *bolt.DB) {
 			}
 
 			b.Put([]byte(mob.CustomDomain), encoded)
-			fmt.Printf("\nWorker: [cached in %s] from www.%s.bonde.org and served at %s \n", mob.CachedAt, mob.Slug, mob.CustomDomain)
+			fmt.Printf("\n[worker] cache updated at %s, reading from www.%s.bonde.org, to be served in %s \n", mob.CachedAt, mob.Slug, mob.CustomDomain)
 			return nil
 		})
 		if err != nil {
