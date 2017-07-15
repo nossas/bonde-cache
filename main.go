@@ -27,7 +27,6 @@ type HttpResponse struct {
 }
 
 type Specification struct {
-	Dev      bool
 	Reset    bool
 	Interval float64
 	Port     string
@@ -49,14 +48,13 @@ func main() {
 	finish := make(chan bool)
 	done := make(chan bool, 1)
 
+	// TODO: move to endpoint /reset?all=1
 	if s.Reset {
 		_, mobs := GetUrls()
 		refreshCache(mobs, db, s) // force first time build cache
 	}
 
-	if !s.Dev {
-		go ServerRedirect(s)
-	}
+	go ServerRedirect(s)
 	go ServerCache(db, s)
 	go Worker(finish, db, s)
 	<-done

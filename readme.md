@@ -17,3 +17,6 @@ docker run -it --rm -p 3000:3000 -v "$PWD":/go/src/app -w /go/src/app -e PORT=80
 # dev mode with proxy to 3000 to enable auto builds
 docker build -f Dockerfile.dev -t nossas/bonde-cache .
 docker run -it --rm -p 3000:3000 -v "$PWD":/go/src/app -w /go/src/app -e CACHE_PORT=3001 -e PORT=3001 -e CACHE_PORTSSL=443 -e CACHE_DEV=true -e CACHE_INTERVAL=20 -e CACHE_RESET=false --name bonde-cache-app nossas/bonde-cache```
+
+
+openssl req -new -newkey rsa:2048 -sha1 -days 3650 -nodes -x509 -subj "/C=US/ST=Georgia/L=Atlanta/O=BNR/CN=www.en.nossas.org" -keyout server.key -out server.crt

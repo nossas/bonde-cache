@@ -55,9 +55,7 @@ func ServerCache(db *bolt.DB, spec Specification) {
 	e.GET("/", func(c echo.Context) error {
 		req := c.Request()
 		host := req.Host
-		if spec.Dev {
-			host, _, _ = net.SplitHostPort(host)
-		}
+		host, _, _ = net.SplitHostPort(host)
 
 		err := db.View(func(tx *bolt.Tx) error {
 			b := tx.Bucket([]byte("cached_urls"))
@@ -81,41 +79,35 @@ func ServerCache(db *bolt.DB, spec Specification) {
 		}
 		return nil
 	})
-	if spec.Dev {
-		e.Debug = true
-		e.Server.Addr = ":" + spec.Port
-		e.Logger.Fatal(gracehttp.Serve(e.Server))
-		// gracehttp.SetLogger(e.Logger)
-	} else {
-		e.AutoTLSManager.HostPolicy = autocert.HostWhitelist(customDomains...)
-		e.AutoTLSManager.Cache = autocert.DirCache("./cache/")
-		e.AutoTLSManager.Email = "tech@nossas.org"
-		e.AutoTLSManager.ForceRSA = true
-		e.DisableHTTP2 = true
-		e.Use(middleware.SecureWithConfig(middleware.SecureConfig{
-			XFrameOptions:         "",
-			HSTSMaxAge:            63072000,
-			ContentSecurityPolicy: "",
-		}))
-		s := e.TLSServer
-		cfg := &tls.Config{
-			CurvePreferences: []tls.CurveID{
-				tls.CurveP256,
-				tls.X25519,
-			},
-			PreferServerCipherSuites: true,
-		}
-		s.TLSConfig = cfg
-		s.TLSConfig.GetCertificate = e.AutoTLSManager.GetCertificate
-		s.Addr = ":" + spec.PortSsl
-		e.Logger.Fatal(gracehttp.Serve(e.Server))
 
-		// if err := e.StartServer(e.TLSServer); err != nil {
-		// 	e.Logger.Info("Server Cache: DOWN")
-		// } else {
-		// 	e.Logger.Info("Server Cache: UP")
-		// }
+	e.AutoTLSManager.HostPolicy = autocert.HostWhitelist(customDomains...)
+	e.AutoTLSManager.Cache = autocert.DirCache("./cache/")
+	e.AutoTLSManager.Email = "tech@nossas.org"
+	e.AutoTLSManager.ForceRSA = true
+	e.DisableHTTP2 = true
+	e.Use(middleware.SecureWithConfig(middleware.SecureConfig{
+		XFrameOptions:         "",
+		HSTSMaxAge:            63072000,
+		ContentSecurityPolicy: "",
+	}))
+	s := e.TLSServer
+	cfg := &tls.Config{
+		CurvePreferences: []tls.CurveID{
+			tls.CurveP256,
+			tls.X25519,
+		},
+		PreferServerCipherSuites: true,
 	}
+	s.TLSConfig = cfg
+	s.TLSConfig.GetCertificate = e.AutoTLSManager.GetCertificate
+	s.Addr = ":" + spec.PortSsl
+	e.Logger.Fatal(gracehttp.Serve(e.Server))
+
+	// if err := e.StartServer(e.TLSServer); err != nil {
+	// 	e.Logger.Info("Server Cache: DOWN")
+	// } else {
+	// 	e.Logger.Info("Server Cache: UP")
+	// }
 }
 
 // Echo HTTP Error Handler
