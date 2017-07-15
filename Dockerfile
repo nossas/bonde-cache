@@ -1,4 +1,4 @@
-FROM golang:onbuild
+FROM golang
 
 ARG TIMEZONE="America/Sao_Paulo"
 RUN set -x \
@@ -14,5 +14,8 @@ RUN set -x \
 
 VOLUME ["/go/src/app"]
 WORKDIR /go/src/app
+COPY . .
 ENV CACHE_INTERVAL 30
 EXPOSE 80 443
+RUN go get && go build
+CMD ["app"]

@@ -3,3 +3,6 @@
 bonde-cache*
 gin-bin
 .vscode/
+*.key
+*.crt
+app
