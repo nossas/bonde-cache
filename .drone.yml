@@ -3,7 +3,6 @@ pipeline:
     image: golang
     commands:
       - go get 
-      - go build
       - go test
   publish:
     image: plugins/docker
@@ -45,12 +44,9 @@ pipeline:
     username: ubuntu
     port: 22
     script:
-      - cd ~/bonde-cache
       - sudo docker pull nossas/bonde-cache:${DRONE_BRANCH}
-      - sudo docker stop bonde-cache-app
-      - sudo docker run -it --rm -p 443:443 -p 80:80 -v "$PWD":/go/src/app -w /go/src/app -e PORT=80 -e CACHE_PORT=80 -e CACHE_PORTSSL=443 -e CACHE_INTERVAL=60 -e CACHE_RESET=false --name bonde-cache-app -d nossas/bonde-cache:${DRONE_BRANCH}
-      - sudo docker start bonde-cache-app
-      - sudo docker logs bonde-cache-app
+      - sudo docker tag nossas/bonde-cache:${DRONE_BRANCH} dokku/00-cache:latest
+      - dokku tags:deploy 00-cache latest
     when:
       status: success
       branch: [hotfix-*, release-*, feature-*, develop]
