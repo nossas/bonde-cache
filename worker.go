@@ -165,11 +165,16 @@ func saveCacheContent(mob Mobilization, resp *http.Response, db *bolt.DB) {
 			mob.CachedAt = time.Now()
 			encoded, err := json.Marshal(mob)
 			if err != nil {
-				return err
+				log.Printf("[worker] cache can't decode mob %s ", err)
 			}
 
-			b.Put([]byte(mob.CustomDomain), encoded)
-			log.Printf("[worker] cache updated at %s, reading from www.%s.bonde.org, to be served in %s ", mob.CachedAt, mob.Slug, mob.CustomDomain)
+			err = b.Put([]byte(mob.CustomDomain), encoded)
+			if err != nil {
+				log.Printf("[worker] cache can't update local db %s ", mob.CustomDomain)
+			} else {
+				log.Printf("[worker] cache updated at %s, reading from www.%s.bonde.org, to be served in %s ", mob.CachedAt, mob.Slug, mob.CustomDomain)
+			}
+
 			return nil
 		})
 		if err != nil {

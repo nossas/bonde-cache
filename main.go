@@ -27,6 +27,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err.Error())
 	}
+	defer db.Close()
 
 	db.Update(func(tx *bolt.Tx) error {
 		tx.CreateBucketIfNotExists([]byte("cached_urls"))
