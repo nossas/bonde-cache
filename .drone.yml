@@ -42,7 +42,7 @@ pipeline:
       branch: [hotfix-*, release-*, feature-*, develop]
   staging-deployment:
     image: appleboy/drone-ssh
-    host: cache.bonde.org
+    host: ssh.staging.bonde.org
     username: ubuntu
     port: 22
     script:
@@ -58,5 +58,4 @@ pipeline:
     channel: n_tech
     username: CI - ${DRONE_REPO_NAME}
     when:
-      event: [ push, tag, build, publish, deployment, pull_request ]
       status: [ success, failure ]
