@@ -18,5 +18,5 @@ VOLUME ["/go/src/app"]
 WORKDIR /go/src/app
 COPY . .
 COPY CHECKS /app/CHECKS
-RUN go get && go build
+RUN go get -u github.com/golang/dep/cmd/dep && dep ensure && go build
 CMD ["app"]
