@@ -1,32 +1,15 @@
 package main
 
 import (
-	"fmt"
 	"log"
-	"net/http"
-	"time"
 
 	"github.com/boltdb/bolt"
 	"github.com/kelseyhightower/envconfig"
 )
 
-type Mobilization struct {
-	ID           int    `json:"id"`
-	Name         string `json:"name"`
-	Content      []byte
-	CachedAt     time.Time
-	Slug         string `json:"slug"`
-	CustomDomain string `json:"custom_domain"`
-	UpdatedAt    string `json:"updated_at"`
-}
-
-type HttpResponse struct {
-	url      string
-	response *http.Response
-	err      error
-}
-
+// Specification are enviroment variables
 type Specification struct {
+	Env      string
 	Reset    bool
 	Interval float64
 	Port     string
@@ -42,17 +25,11 @@ func main() {
 
 	db, err := bolt.Open("bonde-cache.db", 0600, nil)
 	if err != nil {
-		fmt.Errorf("open cache: %s", err)
+		log.Fatal(err.Error())
 	}
 
 	finish := make(chan bool)
 	done := make(chan bool, 1)
-
-	// TODO: move to endpoint /reset?all=1
-	if s.Reset {
-		_, mobs := GetUrls()
-		refreshCache(mobs, db, s) // force first time build cache
-	}
 
 	go ServerRedirect(s)
 	go ServerCache(db, s)

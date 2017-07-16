@@ -3,36 +3,45 @@ package main
 import (
 	"crypto/tls"
 	"encoding/json"
-	"fmt"
-	"net"
+	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/boltdb/bolt"
 	"github.com/facebookgo/grace/gracehttp"
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
+	"github.com/thoas/stats"
 	"golang.org/x/crypto/acme/autocert"
 )
 
-// Handle Redirect to HTTPS
+// ServerRedirect Handle Redirect to HTTPS
 func ServerRedirect(s Specification) {
 	ee := echo.New()
 	ee.Pre(middleware.RemoveTrailingSlash())
 	ee.Pre(middleware.HTTPSWWWRedirect())
 	ee.Pre(middleware.HTTPSRedirect())
 	ee.HTTPErrorHandler = CustomHTTPErrorHandler
+
+	Log := log.New(os.Stdout, "[server]: ", log.Ldate|log.Ltime|log.Lshortfile)
+	gracehttp.SetLogger(Log)
+
 	ee.Server.Addr = ":" + s.Port
 	ee.Logger.Fatal(gracehttp.Serve(ee.Server))
-	// gracehttp.SetLogger(ee.Logger)
-	// if err := ee.Start(":" + os.Getenv("PORT")); err != nil {
-	// 	ee.Logger.Info("Server Redirect: DOWN")
-	// } else {
-	// 	ee.Logger.Info("Server Redirect: UP")
-	// }
 }
 
-// Handle HTTPS Certificates
+func routeStats(c echo.Context) error {
+	statsMiddleware := stats.New()
+	stats := statsMiddleware.Data()
+
+	return c.JSON(http.StatusOK, stats)
+}
+
+// func routeRoot
+// func routeResetAll
+
+// ServerCache Handle HTTPS Certificates
 func ServerCache(db *bolt.DB, spec Specification) {
 	customDomains, _ := GetUrls()
 
@@ -45,19 +54,21 @@ func ServerCache(db *bolt.DB, spec Specification) {
 	e.Pre(middleware.WWWRedirect())
 	e.HTTPErrorHandler = CustomHTTPErrorHandler
 
+	e.GET("/stats", routeStats)
+
 	e.GET("/reset-all", func(c echo.Context) error {
 		_, mobs := GetUrls()
-		refreshCache(mobs, db, spec) // force first time build cache
-
+		spec.Reset = true
+		refreshCache(mobs, db, spec)
+		spec.Reset = false
 		return c.String(http.StatusOK, "Resetting cache")
 	})
 
 	e.GET("/", func(c echo.Context) error {
 		req := c.Request()
 		host := req.Host
-		host, _, _ = net.SplitHostPort(host)
 
-		err := db.View(func(tx *bolt.Tx) error {
+		db.View(func(tx *bolt.Tx) error {
 			b := tx.Bucket([]byte("cached_urls"))
 			v := b.Get([]byte(host))
 			var mob Mobilization
@@ -74,9 +85,6 @@ func ServerCache(db *bolt.DB, spec Specification) {
 			c.HTML(http.StatusOK, string(mob.Content)+"<!--"+mob.CachedAt.Format(time.RFC3339)+"-->")
 			return nil
 		})
-		if err != nil {
-			return fmt.Errorf("%s", err)
-		}
 		return nil
 	})
 
@@ -90,27 +98,37 @@ func ServerCache(db *bolt.DB, spec Specification) {
 		HSTSMaxAge:            63072000,
 		ContentSecurityPolicy: "",
 	}))
+
 	s := e.TLSServer
 	cfg := &tls.Config{
-		CurvePreferences: []tls.CurveID{
-			tls.CurveP256,
-			tls.X25519,
-		},
+		// MinVersion:               tls.VersionTLS12,
+		// CurvePreferences:         []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256, tls.X25519},
 		PreferServerCipherSuites: true,
+		// CipherSuites: []uint16{
+		// 	tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+		// 	tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+		// 	tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+		// 	tls.TLS_RSA_WITH_AES_256_CBC_SHA,
+		// },
 	}
 	s.TLSConfig = cfg
-	s.TLSConfig.GetCertificate = e.AutoTLSManager.GetCertificate
-	s.Addr = ":" + spec.PortSsl
-	e.Logger.Fatal(gracehttp.Serve(e.Server))
+	if spec.Env == "production" {
+		s.TLSConfig.GetCertificate = e.AutoTLSManager.GetCertificate
+	} else {
+		e.Debug = true
+		s.TLSConfig.Certificates = make([]tls.Certificate, 1)
+		s.TLSConfig.Certificates[0], _ = tls.LoadX509KeyPair("./server.crt", "./server.key")
+	}
 
-	// if err := e.StartServer(e.TLSServer); err != nil {
-	// 	e.Logger.Info("Server Cache: DOWN")
-	// } else {
-	// 	e.Logger.Info("Server Cache: UP")
-	// }
+	LogSsl := log.New(os.Stdout, "[server_ssl]: ", log.Ldate|log.Ltime|log.Lshortfile)
+	gracehttp.SetLogger(LogSsl)
+
+	s.Addr = ":" + spec.PortSsl
+	e.Logger.Fatal(gracehttp.Serve(e.TLSServer))
+
 }
 
-// Echo HTTP Error Handler
+// CustomHTTPErrorHandler Echo HTTP Error Handler
 func CustomHTTPErrorHandler(err error, c echo.Context) {
 	req := c.Request()
 	host := req.Host
