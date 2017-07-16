@@ -12,10 +12,11 @@ RUN set -x \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get purge -y --auto-remove apt-utils
 
+ENV CACHE_INTERVAL 30
+EXPOSE 80 443
 VOLUME ["/go/src/app"]
 WORKDIR /go/src/app
 COPY . .
-ENV CACHE_INTERVAL 30
-EXPOSE 80 443
+COPY CHECKS /app/CHECKS
 RUN go get && go build
 CMD ["app"]

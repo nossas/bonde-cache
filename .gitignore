@@ -6,3 +6,4 @@ gin-bin
 *.key
 *.crt
 app
+debug
