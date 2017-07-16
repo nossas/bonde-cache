@@ -28,6 +28,11 @@ func main() {
 		log.Fatal(err.Error())
 	}
 
+	db.Update(func(tx *bolt.Tx) error {
+		tx.CreateBucketIfNotExists([]byte("cached_urls"))
+		return nil
+	})
+
 	finish := make(chan bool)
 	done := make(chan bool, 1)
 
