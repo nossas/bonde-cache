@@ -23,7 +23,7 @@ func main() {
 		log.Fatal(err.Error())
 	}
 
-	db, err := bolt.Open("bonde-cache.db", 0600, nil)
+	db, err := bolt.Open("./data/db/bonde-cache", 0600, nil)
 	if err != nil {
 		log.Fatal(err.Error())
 	}

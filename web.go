@@ -89,7 +89,7 @@ func ServerCache(db *bolt.DB, spec Specification) {
 	})
 
 	e.AutoTLSManager.HostPolicy = autocert.HostWhitelist(customDomains...)
-	e.AutoTLSManager.Cache = autocert.DirCache("./cache/")
+	e.AutoTLSManager.Cache = autocert.DirCache("./data/certificates/")
 	e.AutoTLSManager.Email = "tech@nossas.org"
 	e.AutoTLSManager.ForceRSA = true
 	e.DisableHTTP2 = true
@@ -117,7 +117,7 @@ func ServerCache(db *bolt.DB, spec Specification) {
 	} else {
 		e.Debug = true
 		s.TLSConfig.Certificates = make([]tls.Certificate, 1)
-		s.TLSConfig.Certificates[0], _ = tls.LoadX509KeyPair("./server.crt", "./server.key")
+		s.TLSConfig.Certificates[0], _ = tls.LoadX509KeyPair("./data/certificates/server.crt", "./data/certificates/server.key")
 	}
 
 	LogSsl := log.New(os.Stdout, "[server_ssl]: ", log.Ldate|log.Ltime|log.Lshortfile)

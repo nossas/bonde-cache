@@ -18,6 +18,7 @@ VOLUME ["/go/src/app"]
 WORKDIR /go/src/app
 COPY . .
 COPY CHECKS /app/CHECKS
-RUN mkdir -p cache && chmod 777 cache && chmod 777 .
-RUN go get -u github.com/golang/dep/cmd/dep && dep ensure && go build && go install
+RUN mkdir -p data/certificates data/db && chmod -R 777 data
+RUN go get -u github.com/golang/dep/cmd/dep && go get github.com/koblas/s3-cli
+RUN dep ensure && go build && go install
 CMD ["app"]
