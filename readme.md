@@ -44,8 +44,8 @@ dokku config:set CACHE_RESET=false
 dokku config:set DOKKU_DOCKERFILE_PORTS="443/tcp 80/tcp"
 dokku config:set DOKKU_PROXY_PORT_MAP="http:443:443 http:80:80"
 dokku config:set PORT=80
-dokku config:set AWS_ACCESS_KEY_ID
-dokku config:set AWS_ACCESS_KEY
+dokku config:set AWS_SECRET_ACCESS_KEY=
+dokku config:set AWS_ACCESS_KEY_ID=
 
 sudo docker pull nossas/bonde-cache:${DRONE_BRANCH}
 sudo docker tag nossas/bonde-cache:${DRONE_BRANCH} dokku/00-cache:latest
@@ -53,12 +53,5 @@ dokku tags:deploy 00-cache latest
 
 dokku storage:mount 00-cache /var/lib/dokku/data/storage/cache-certificates:/go/src/app/data/certificates
 dokku storage:mount 00-cache /var/lib/dokku/data/storage/cache-db:/go/src/app/data/db
-
-s3-cli cp s3://bonde-cache/staging/certificates/ /var/lib/dokku/data/storage/cache-certificates
-s3-cli cp s3://bonde-cache/staging/db/ /var/lib/dokku/data/storage/db
-
-s3-cli sync --delete-removed /var/lib/dokku/data/storage/cache-certificates s3://bonde-cache/staging/db/
-s3-cli sync --delete-removed /var/lib/dokku/data/storage/db s3://bonde-cache/staging/db/
-
 
 ``` 

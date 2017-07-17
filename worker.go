@@ -54,21 +54,25 @@ func Worker(done chan bool, db *bolt.DB, s Specification) {
 			case <-ticker.C:
 				_, mobs := GetUrls()
 				for _, mob := range mobs {
+					var domainContent []byte
 					db.View(func(tx *bolt.Tx) error {
 						b := tx.Bucket([]byte("cached_urls"))
-						v := b.Get([]byte(mob.CustomDomain))
-
-						if string(v) == "" {
-							log.Printf("[worker] domain %s not found at cache. Slug %s update at %s.", mob.CustomDomain, mob.Slug, mob.UpdatedAt)
-							s.Reset = true
-							readCacheContent(mob, db, s)
-							time.Sleep(5 * time.Second)
-							pid := os.Getpid()
-							proc, _ := os.FindProcess(pid)
-							proc.Signal(os.Interrupt)
-						}
+						domainContent = b.Get([]byte(mob.CustomDomain))
 						return nil
 					})
+
+					if string(domainContent) == "" {
+						log.Printf("[worker] domain %s not found at cache. Slug %s update at %s.", mob.CustomDomain, mob.Slug, mob.UpdatedAt)
+						s.Reset = true
+						readCacheContent(mob, db, s)
+						updateCertificates(s)
+						updateDb(s)
+						time.Sleep(5 * time.Second)
+						pid := os.Getpid()
+						proc, _ := os.FindProcess(pid)
+						proc.Signal(os.Interrupt)
+					}
+
 				}
 				s.Reset = false
 				refreshCache(mobs, db, s)

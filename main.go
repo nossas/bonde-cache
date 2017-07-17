@@ -23,16 +23,22 @@ func main() {
 		log.Fatal(err.Error())
 	}
 
-	db, err := bolt.Open("./data/db/bonde-cache", 0600, nil)
+	restoreCertificates(s)
+
+	if !s.Reset {
+		restoreDb(s)
+	}
+
+	db, err := bolt.Open("./data/db/bonde-cache.db", 0600, nil)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 	defer db.Close()
 
-	db.Update(func(tx *bolt.Tx) error {
-		tx.CreateBucketIfNotExists([]byte("cached_urls"))
-		return nil
-	})
+	if s.Reset {
+		_, mobs := GetUrls()
+		refreshCache(mobs, db, s)
+	}
 
 	finish := make(chan bool)
 	done := make(chan bool, 1)
@@ -43,5 +49,4 @@ func main() {
 	<-done
 
 	<-finish
-	// defer db.Close()
 }
