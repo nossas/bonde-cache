@@ -12,7 +12,6 @@ import (
 	"github.com/facebookgo/grace/gracehttp"
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
-	"github.com/thoas/stats"
 	"golang.org/x/crypto/acme/autocert"
 )
 
@@ -30,16 +29,6 @@ func ServerRedirect(s Specification) {
 	ee.Server.Addr = ":" + s.Port
 	ee.Logger.Fatal(gracehttp.Serve(ee.Server))
 }
-
-func routeStats(c echo.Context) error {
-	statsMiddleware := stats.New()
-	stats := statsMiddleware.Data()
-
-	return c.JSON(http.StatusOK, stats)
-}
-
-// func routeRoot
-// func routeResetAll
 
 // ServerCache Handle HTTPS Certificates
 func ServerCache(db *bolt.DB, spec Specification) {
@@ -126,21 +115,4 @@ func ServerCache(db *bolt.DB, spec Specification) {
 	s.Addr = ":" + spec.PortSsl
 	e.Logger.Fatal(gracehttp.Serve(e.TLSServer))
 
-}
-
-// CustomHTTPErrorHandler Echo HTTP Error Handler
-func CustomHTTPErrorHandler(err error, c echo.Context) {
-	req := c.Request()
-	host := req.Host
-
-	// code := http.StatusInternalServerError
-	// if he, ok := err.(*echo.HTTPError); ok {
-	// 	code = he.Code
-	// }
-
-	if err := c.File("error.html"); err != nil {
-		c.Logger().Error(err)
-	}
-
-	c.Logger().Error(err, host)
 }

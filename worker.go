@@ -30,6 +30,18 @@ type HTTPResponse struct {
 	err      error
 }
 
+var netTransport = &http.Transport{
+	Dial: (&net.Dialer{
+		Timeout: 5 * time.Second,
+	}).Dial,
+	TLSHandshakeTimeout: 5 * time.Second,
+}
+
+var netClient = &http.Client{
+	Timeout:   time.Second * 10,
+	Transport: netTransport,
+}
+
 // Worker enquee refresh cache to run between intervals
 func Worker(done chan bool, db *bolt.DB, s Specification) {
 	ticker := time.NewTicker(time.Duration(s.Interval) * time.Second)
@@ -69,17 +81,6 @@ func Worker(done chan bool, db *bolt.DB, s Specification) {
 	}()
 
 	done <- true
-}
-
-var netTransport = &http.Transport{
-	Dial: (&net.Dialer{
-		Timeout: 5 * time.Second,
-	}).Dial,
-	TLSHandshakeTimeout: 5 * time.Second,
-}
-var netClient = &http.Client{
-	Timeout:   time.Second * 10,
-	Transport: netTransport,
 }
 
 // GetUrls serach to domains we must allow to be served
@@ -148,8 +149,6 @@ func readCacheContent(mob Mobilization, db *bolt.DB, s Specification) []*HTTPRes
 			return nil
 		}
 	}
-
-	// return responses
 }
 
 func saveCacheContent(mob Mobilization, resp *http.Response, db *bolt.DB) {
