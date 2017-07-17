@@ -1,4 +1,6 @@
-Bonde Cache
+# Bonde Cache
+
+## Features
 
 1. http web server with maximum performance
 2. read json from mobilizations
@@ -19,19 +21,28 @@ Bonde Cache
  
 As ready as possible to shutdown the lights and close the door.
 
+## Development
+### Docker support
+
 ```
 docker build -t nossas/bonde-cache .
-docker run -it --rm -p 3000:3000 -v "$PWD":/go/src/app -w /go/src/app -e PORT=80 -e CACHE_PORT=80 -e CACHE_PORTSSL=443 -e CACHE_DEV=false -e CACHE_INTERVAL=60 -e CACHE_RESET=false --name bonde-cache-app nossas/bonde-cache
+docker run -it --rm -p 443:443 -v "$PWD":/go/src/app -w /go/src/app -e CACHE_PORT=80 -e PORT=80 -e CACHE_PORTSSL=443 -e CACHE_INTERVAL=20 -e CACHE_RESET=false -e CACHE_ENV=development -e AWS_ACCESS_KEY_ID= -e AWS_SECRET_ACCESS_KEY=  --name bonde-cache-app nossas/bonde-cache app
+```
 
-# dev mode with proxy to 3000 to enable auto builds
-docker build -f Dockerfile.dev -t nossas/bonde-cache .
-docker run -it --rm -p 3000:3000 -v "$PWD":/go/src/app -w /go/src/app -e CACHE_PORT=3001 -e PORT=3001 -e CACHE_PORTSSL=443 -e CACHE_DEV=true -e CACHE_INTERVAL=20 -e CACHE_RESET=false --name bonde-cache-app nossas/bonde-cache```
+### Generate self-signed ssl
 
-
+```
 openssl req -new -newkey rsa:2048 -sha1 -days 3650 -nodes -x509 -subj "/C=US/ST=Georgia/L=Atlanta/O=BNR/CN=www.en.nossas.org" -keyout server.key -out server.crt
+```
+
+### Starting
+
+Add do hosts ```127.0.0.1    www.en.nossas.org``` and try to access the url at browser.
 
 
-Setup app with dokku
+## Production
+
+### Dokku support
 
 ```
 dokku apps:create 00-cache
@@ -47,8 +58,8 @@ dokku config:set PORT=80
 dokku config:set AWS_SECRET_ACCESS_KEY=
 dokku config:set AWS_ACCESS_KEY_ID=
 
-sudo docker pull nossas/bonde-cache:${DRONE_BRANCH}
-sudo docker tag nossas/bonde-cache:${DRONE_BRANCH} dokku/00-cache:latest
+sudo docker pull nossas/bonde-cache:0.5.0
+sudo docker tag nossas/bonde-cache:0.5.0 dokku/00-cache:latest
 dokku tags:deploy 00-cache latest
 
 dokku storage:mount 00-cache /var/lib/dokku/data/storage/cache-certificates:/go/src/app/data/certificates
