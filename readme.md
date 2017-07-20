@@ -14,11 +14,11 @@
 10. enabled grateful shutdown when server is restarted because new domains was added
 11. document how to configure persistent storage using dokku to save certificates and db to local file
 12. create script to sync local files (db and certificates) to s3
-12. create terraform to load ec2 instance 
+12. create terraform to load ec2 instance
 13. create shell script to setup instance and configure docker to run bonde-cache
 14. save to analytics db the views and stats from each request recieved
 15. provide some stats by host
- 
+
 As ready as possible to shutdown the lights and close the door.
 
 ## Development
@@ -47,22 +47,18 @@ Add do hosts ```127.0.0.1    www.en.nossas.org``` and try to access the url at b
 ```
 dokku apps:create 00-cache
 
-dokku config:set CACHE_ENV=production
-dokku config:set CACHE_INTERVAL=40
-dokku config:set CACHE_PORT=80
-dokku config:set CACHE_PORTSSL=443
-dokku config:set CACHE_RESET=false
-dokku config:set DOKKU_DOCKERFILE_PORTS="443/tcp 80/tcp"
-dokku config:set DOKKU_PROXY_PORT_MAP="http:443:443 http:80:80"
-dokku config:set PORT=80
-dokku config:set AWS_SECRET_ACCESS_KEY=
-dokku config:set AWS_ACCESS_KEY_ID=
-
-sudo docker pull nossas/bonde-cache:0.5.0
-sudo docker tag nossas/bonde-cache:0.5.0 dokku/00-cache:latest
-dokku tags:deploy 00-cache latest
+dokku config:set 00-cache CACHE_ENV=production
+dokku config:set 00-cache CACHE_INTERVAL=40
+dokku config:set 00-cache CACHE_PORT=80
+dokku config:set 00-cache CACHE_PORTSSL=443
+dokku config:set 00-cache CACHE_RESET=false
+dokku config:set 00-cache DOKKU_DOCKERFILE_PORTS="443/tcp 80/tcp"
+dokku config:set 00-cache DOKKU_PROXY_PORT_MAP="http:443:443 http:80:80"
+dokku config:set 00-cache PORT=80
+dokku config:set 00-cache AWS_SECRET_ACCESS_KEY=
+dokku config:set 00-cache AWS_ACCESS_KEY_ID=
 
 dokku storage:mount 00-cache /var/lib/dokku/data/storage/cache-certificates:/go/src/app/data/certificates
 dokku storage:mount 00-cache /var/lib/dokku/data/storage/cache-db:/go/src/app/data/db
 
-``` 
+```
