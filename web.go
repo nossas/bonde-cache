@@ -32,7 +32,7 @@ func ServerRedirect(s Specification) {
 
 // ServerCache Handle HTTPS Certificates
 func ServerCache(db *bolt.DB, spec Specification) {
-	customDomains, _ := GetUrls()
+	customDomains, _ := GetUrls(spec)
 
 	e := echo.New()
 	e.Use(middleware.Logger())
@@ -46,7 +46,7 @@ func ServerCache(db *bolt.DB, spec Specification) {
 	e.GET("/stats", routeStats)
 
 	e.GET("/reset-all", func(c echo.Context) error {
-		_, mobs := GetUrls()
+		_, mobs := GetUrls(spec)
 		spec.Reset = true
 		refreshCache(mobs, db, spec)
 		spec.Reset = false
@@ -71,8 +71,10 @@ func ServerCache(db *bolt.DB, spec Specification) {
 				readCacheContent(mob, db, spec)
 			}
 
-			c.HTML(http.StatusOK, string(mob.Content)+"<!--"+mob.CachedAt.Format(time.RFC3339)+"-->")
-			return nil
+			if mob.Public {
+				return c.HTML(http.StatusOK, string(mob.Content)+"<!--"+mob.CachedAt.Format(time.RFC3339)+"-->")
+			}
+			return c.HTML(http.StatusOK, string("Página não encontrada!"))
 		})
 		return nil
 	})

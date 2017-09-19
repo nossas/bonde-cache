@@ -21,6 +21,7 @@ type Mobilization struct {
 	Slug         string `json:"slug"`
 	CustomDomain string `json:"custom_domain"`
 	UpdatedAt    string `json:"updated_at"`
+	Public       bool
 }
 
 // HTTPResponse helper handle output from requests
@@ -48,11 +49,11 @@ func Worker(done chan bool, db *bolt.DB, s Specification) {
 	quit := make(chan struct{})
 	log.Println("[worker] job started")
 
-	go func() {
+	go func(s Specification) {
 		for {
 			select {
 			case <-ticker.C:
-				_, mobs := GetUrls()
+				_, mobs := GetUrls(s)
 				for _, mob := range mobs {
 					var domainContent []byte
 					db.View(func(tx *bolt.Tx) error {
@@ -82,16 +83,19 @@ func Worker(done chan bool, db *bolt.DB, s Specification) {
 				return
 			}
 		}
-	}()
+	}(s)
 
 	done <- true
 }
 
 // GetUrls serach to domains we must allow to be served
-func GetUrls() (customDomains []string, mobs []Mobilization) {
+func GetUrls(s Specification) (customDomains []string, mobs []Mobilization) {
 	var jsonData []Mobilization
 
-	var r, _ = netClient.Get("https://api.bonde.org/mobilizations")
+	var r, err = netClient.Get(s.ApiUrl + "/mobilizations")
+	if err != nil {
+		log.Println("[worker] couldn't reach api server")
+	}
 	defer r.Body.Close()
 
 	var jsonDataFromHTTP, _ = ioutil.ReadAll(r.Body)
@@ -101,8 +105,10 @@ func GetUrls() (customDomains []string, mobs []Mobilization) {
 	customDomains = make([]string, 0)
 
 	for _, jd := range jsonData {
+		jd.Public = false
 		if jd.CustomDomain != "" {
 			customDomains = append(customDomains, jd.CustomDomain)
+			jd.Public = true
 			mobs = append(mobs, jd)
 		}
 	}

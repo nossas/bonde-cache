@@ -14,6 +14,7 @@ type Specification struct {
 	Interval float64
 	Port     string
 	PortSsl  string
+	ApiUrl   string
 }
 
 func main() {
@@ -36,7 +37,7 @@ func main() {
 	defer db.Close()
 
 	if s.Reset {
-		_, mobs := GetUrls()
+		_, mobs := GetUrls(s)
 		refreshCache(mobs, db, s)
 	}
 
