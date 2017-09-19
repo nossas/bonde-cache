@@ -26,7 +26,7 @@ pipeline:
       - cd ~/bonde-cache
       - sudo docker pull nossas/bonde-cache:${DRONE_TAG}
       - sudo docker stop bonde-cache-app
-      - sudo docker run -it --rm -p 443:443 -p 80:80 -v "$PWD":/go/src/app -w /go/src/app -e PORT=80 -e CACHE_PORT=80 -e CACHE_PORTSSL=443 -e CACHE_DEV=false -e CACHE_INTERVAL=60 -e CACHE_RESET=false --name bonde-cache-app -d nossas/bonde-cache:${DRONE_TAG}
+      - sudo docker run -it --rm -p 443:443 -p 80:80 -v "$PWD":/go/src/app -w /go/src/app -e PORT=80 -e CACHE_PORT=80 -e CACHE_PORTSSL=443 -e CACHE_DEV=false -e CACHE_INTERVAL=60 -e CACHE_RESET=false -e CACHE_APIURL=https://api.bonde.org --name bonde-cache-app -d nossas/bonde-cache:${DRONE_TAG}
       - sudo docker start bonde-cache-app
       - sudo docker logs bonde-cache-app
     when:
@@ -41,19 +41,19 @@ pipeline:
     when:
       status: success
       branch: [hotfix-*, release-*, feature-*, develop]
-  staging-deploy:
-    image: appleboy/drone-ssh
-    host: ssh.staging.bonde.org
-    username: ubuntu
-    port: 22
-    secrets: [ ssh_key ]
-    script:
-      - sudo docker pull nossas/bonde-cache:${DRONE_BRANCH}
-      - sudo docker tag nossas/bonde-cache:${DRONE_BRANCH} dokku/cache:latest
-      - dokku tags:deploy cache latest
+
+  deploy-rancher-staging:
+    image: peloton/drone-rancher
+    url: http://cluster.bonde.org
+    service: staging/cache
+    docker_image: nossas/bonde-cache:${DRONE_BRANCH}
+    timeout: 360
+    confirm: true
+    secrets: [ rancher_access_key, rancher_secret_key ]
     when:
       status: success
       branch: [hotfix-*, release-*, feature-*, develop]
+
   notify:
     image: plugins/slack
     webhook: https://hooks.slack.com/services/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
