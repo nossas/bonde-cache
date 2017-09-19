@@ -27,7 +27,7 @@ func execCommand(command []string) {
 }
 
 func restoreCommand(what string, s Specification) {
-	args := fmt.Sprintf("s3cmd sync --secret_key=%v --access_key=%v s3://bonde-cache/%v/%v/ ./data/%v/", awsSecret, awsAccess, s.Env, what, what)
+	args := fmt.Sprintf("s3cmd sync --secret_key=%v --access_key=%v s3://bonde-cache/%v/%v/ ./data/%v/", awsSecret, awsAccess, what, s.Env, what)
 	log.Print(args)
 
 	command := strings.Split(args, " ")
@@ -35,7 +35,7 @@ func restoreCommand(what string, s Specification) {
 }
 
 func updateCommand(what string, s Specification) {
-	args := fmt.Sprintf("s3cmd sync --secret_key=%v --access_key=%v ./data/%v/ s3://bonde-cache/%v/%v/", awsSecret, awsAccess, s.Env, what, what)
+	args := fmt.Sprintf("s3cmd sync --secret_key=%v --access_key=%v ./data/%v/ s3://bonde-cache/%v/%v/", awsSecret, awsAccess, what, s.Env, what)
 	log.Print(args)
 
 	command := strings.Split(args, " ")
