@@ -16,7 +16,7 @@ ENV CACHE_INTERVAL 30
 EXPOSE 80 443
 VOLUME ["/go/src/app"]
 WORKDIR /go/src/app
-RUN mkdir -p data/db && chmod -R 777 data && go get -u github.com/golang/dep/cmd/dep
+RUN mkdir -p data/db data/certificates && chmod -R 777 data && go get -u github.com/golang/dep/cmd/dep
 COPY . .
 RUN dep ensure && go build && go install
 CMD ["app"]
