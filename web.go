@@ -101,7 +101,7 @@ func webCache(db *bolt.DB, spec Specification) {
 		// },
 	}
 	s.TLSConfig = cfg
-	if spec.Env == "production" {
+	if spec.Env == "production" || spec.Env == "staging" {
 		s.TLSConfig.GetCertificate = e.AutoTLSManager.GetCertificate
 	} else {
 		e.Debug = true
