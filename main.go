@@ -30,7 +30,7 @@ func main() {
 		syncRestoreDb(s)
 	}
 
-	db, err := bolt.Open("./data/db/bonde-cache.db", 0600, nil)
+	db, err := bolt.Open("./data/db/bonde-cache.db", 0666, nil)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
