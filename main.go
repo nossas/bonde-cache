@@ -11,7 +11,7 @@ import (
 // Specification are enviroment variables
 type Specification struct {
 	Env      string
-	Reset    bool
+	Sync     bool
 	Interval float64
 	Port     string
 	PortSsl  string
@@ -25,11 +25,10 @@ func main() {
 		log.Fatal(err.Error())
 	}
 
-	// restoreCertificates(s)
-
-	// if !s.Reset {
-	// 	restoreDb(s)
-	// }
+	if s.Sync {
+		syncRestoreCertificates(s)
+		syncRestoreDb(s)
+	}
 
 	db, err := bolt.Open("./data/db/bonde-cache.db", 0600, nil)
 	if err != nil {
@@ -37,22 +36,9 @@ func main() {
 	}
 	defer db.Close()
 
-	gocron.Every(60).Seconds().Do(populateCache, db, s, true)
+	go webRedirect(s)
+	go webCache(db, s)
 
-	gocron.Every(1).Day().At("06:00").Do(populateCache, db, s, false)
-	// if s.Reset {
-	// 	_, mobs := GetUrls(s)
-	// 	refreshCache(mobs, db, s)
-	// }
-
-	// finish := make(chan bool)
-	// done := make(chan bool, 1)
-
-	go ServerRedirect(s)
-	go ServerCache(db, s)
-	// go Worker(finish, db, s)
-
-	// <-finish
+	worker(db, s)
 	<-gocron.Start()
-	// <-done
 }

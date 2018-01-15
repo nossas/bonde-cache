@@ -16,7 +16,7 @@ import (
 )
 
 // ServerRedirect Handle Redirect to HTTPS
-func ServerRedirect(s Specification) {
+func webRedirect(s Specification) {
 	ee := echo.New()
 	ee.Pre(middleware.RemoveTrailingSlash())
 	ee.Pre(middleware.HTTPSWWWRedirect())
@@ -31,7 +31,7 @@ func ServerRedirect(s Specification) {
 }
 
 // ServerCache Handle HTTPS Certificates
-func ServerCache(db *bolt.DB, spec Specification) {
+func webCache(db *bolt.DB, spec Specification) {
 	customDomains, _ := GetUrls(spec)
 
 	e := echo.New()
@@ -66,6 +66,7 @@ func ServerCache(db *bolt.DB, spec Specification) {
 			noCache := c.QueryParam("nocache")
 			if noCache == "1" {
 				readOriginContent(mob, db, spec)
+				log.Println("Limpando cache..." + mob.Name)
 			}
 
 			if mob.Public {

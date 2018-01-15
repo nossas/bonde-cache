@@ -6,9 +6,11 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/boltdb/bolt"
+	"github.com/jasonlvhit/gocron"
 )
 
 // Mobilization is saved as columns into to file
@@ -42,8 +44,41 @@ var netClient = &http.Client{
 	Transport: netTransport,
 }
 
+func worker(db *bolt.DB, s Specification) {
+	if s.Sync {
+		gocron.Every(30).Seconds().Do(manageCertificate, db, s)
+	}
+	gocron.Every(60).Seconds().Do(populateCache, db, s, true)
+	gocron.Every(1).Day().At("06:00").Do(populateCache, db, s, false)
+}
+
+func manageCertificate(db *bolt.DB, s Specification) {
+	log.Println("[manageCertificate] job started")
+	_, mobs := GetUrls(s)
+
+	for _, mob := range mobs {
+		var domainContent []byte
+		db.View(func(tx *bolt.Tx) error {
+			b := tx.Bucket([]byte("cached_urls"))
+			domainContent = b.Get([]byte(mob.CustomDomain))
+			return nil
+		})
+
+		if string(domainContent) == "" {
+			log.Printf("[manageCertificate] domain %s not found at cache. Slug %s update at %s.", mob.CustomDomain, mob.Slug, mob.UpdatedAt)
+			readOriginContent(mob, db, s)
+			syncUpdateCertificates(s)
+			syncUpdateDb(s)
+			time.Sleep(60 * time.Second)
+			pid := os.Getpid()
+			proc, _ := os.FindProcess(pid)
+			proc.Signal(os.Interrupt)
+		}
+	}
+}
+
 func populateCache(db *bolt.DB, s Specification, recentOnly bool) {
-	log.Println("[worker] job started")
+	log.Println("[populateCache] job started")
 	_, mobs := GetUrls(s)
 
 	for _, mob := range mobs {
@@ -100,9 +135,6 @@ func readOriginContent(mob Mobilization, db *bolt.DB, s Specification) []*HTTPRe
 	ch := make(chan *HTTPResponse, 1) // buffered
 	responses := []*HTTPResponse{}
 
-	// log.Printf("Checking if %s || %s <= %f ", time.Now().Format("2006-01-02T15:04:05.000-07:00"), mob.UpdatedAt, interval*3.0)
-	// tUpdatedAt, _ := time.Parse("2006-01-02T15:04:05.000-07:00", mob.UpdatedAt)
-	// if time.Now().Sub(tUpdatedAt).Seconds() <= s.Interval*3.0 || s.Reset {
 	go func(mob Mobilization) {
 		resp, err := netClient.Get("http://" + mob.Slug + ".bonde.org")
 		// defer resp.Body.Close()

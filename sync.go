@@ -43,21 +43,21 @@ func updateCommand(what string, s Specification) {
 }
 
 // Download DB from S3
-func restoreDb(s Specification) {
+func syncRestoreDb(s Specification) {
 	restoreCommand("db", s)
 }
 
 // Upload DB to S3
-func updateDb(s Specification) {
+func syncUpdateDb(s Specification) {
 	updateCommand("db", s)
 }
 
 // Download certificates from S3
-func restoreCertificates(s Specification) {
+func syncRestoreCertificates(s Specification) {
 	restoreCommand("certificates", s)
 }
 
 // Upload certificates to S3 before exit
-func updateCertificates(s Specification) {
+func syncUpdateCertificates(s Specification) {
 	updateCommand("certificates", s)
 }
