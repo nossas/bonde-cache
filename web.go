@@ -48,7 +48,7 @@ func ServerCache(db *bolt.DB, spec Specification) {
 	e.GET("/reset-all", func(c echo.Context) error {
 		_, mobs := GetUrls(spec)
 		spec.Reset = true
-		refreshCache(mobs, db, spec)
+		writeOriginToCache(mobs, db, spec)
 		spec.Reset = false
 		return c.String(http.StatusOK, "Resetting cache")
 	})
@@ -68,7 +68,7 @@ func ServerCache(db *bolt.DB, spec Specification) {
 
 			noCache := c.QueryParam("nocache")
 			if noCache == "1" {
-				readCacheContent(mob, db, spec)
+				readOriginContent(mob, db, spec)
 			}
 
 			if mob.Public {

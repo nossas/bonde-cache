@@ -4,6 +4,7 @@ import (
 	"log"
 
 	"github.com/boltdb/bolt"
+	"github.com/jasonlvhit/gocron"
 	"github.com/kelseyhightower/envconfig"
 )
 
@@ -24,11 +25,11 @@ func main() {
 		log.Fatal(err.Error())
 	}
 
-	restoreCertificates(s)
+	// restoreCertificates(s)
 
-	if !s.Reset {
-		restoreDb(s)
-	}
+	// if !s.Reset {
+	// 	restoreDb(s)
+	// }
 
 	db, err := bolt.Open("./data/db/bonde-cache.db", 0600, nil)
 	if err != nil {
@@ -36,18 +37,21 @@ func main() {
 	}
 	defer db.Close()
 
-	if s.Reset {
-		_, mobs := GetUrls(s)
-		refreshCache(mobs, db, s)
-	}
+	gocron.Every(60).Seconds().Do(populateCache, db, s)
 
-	finish := make(chan bool)
-	done := make(chan bool, 1)
+	// if s.Reset {
+	// 	_, mobs := GetUrls(s)
+	// 	refreshCache(mobs, db, s)
+	// }
+
+	// finish := make(chan bool)
+	// done := make(chan bool, 1)
 
 	go ServerRedirect(s)
 	go ServerCache(db, s)
-	go Worker(finish, db, s)
-	<-done
+	// go Worker(finish, db, s)
 
-	<-finish
+	// <-finish
+	<-gocron.Start()
+	// <-done
 }

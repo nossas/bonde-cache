@@ -6,7 +6,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/boltdb/bolt"
@@ -43,49 +42,10 @@ var netClient = &http.Client{
 	Transport: netTransport,
 }
 
-// Worker enquee refresh cache to run between intervals
-func Worker(done chan bool, db *bolt.DB, s Specification) {
-	ticker := time.NewTicker(time.Duration(s.Interval) * time.Second)
-	quit := make(chan struct{})
+func populateCache(db *bolt.DB, s Specification) {
 	log.Println("[worker] job started")
-
-	go func(s Specification) {
-		for {
-			select {
-			case <-ticker.C:
-				_, mobs := GetUrls(s)
-				for _, mob := range mobs {
-					var domainContent []byte
-					db.View(func(tx *bolt.Tx) error {
-						b := tx.Bucket([]byte("cached_urls"))
-						domainContent = b.Get([]byte(mob.CustomDomain))
-						return nil
-					})
-
-					if string(domainContent) == "" {
-						log.Printf("[worker] domain %s not found at cache. Slug %s update at %s.", mob.CustomDomain, mob.Slug, mob.UpdatedAt)
-						s.Reset = true
-						readCacheContent(mob, db, s)
-						updateCertificates(s)
-						updateDb(s)
-						time.Sleep(5 * time.Second)
-						pid := os.Getpid()
-						proc, _ := os.FindProcess(pid)
-						proc.Signal(os.Interrupt)
-					}
-
-				}
-				s.Reset = false
-				refreshCache(mobs, db, s)
-			case <-quit:
-				ticker.Stop()
-				// done <- true
-				return
-			}
-		}
-	}(s)
-
-	done <- true
+	_, mobs := GetUrls(s)
+	writeOriginToCache(mobs, db, s)
 }
 
 // GetUrls serach to domains we must allow to be served
@@ -115,9 +75,9 @@ func GetUrls(s Specification) (customDomains []string, mobs []Mobilization) {
 	return customDomains, mobs
 }
 
-func refreshCache(mobs []Mobilization, db *bolt.DB, s Specification) []*HTTPResponse {
+func writeOriginToCache(mobs []Mobilization, db *bolt.DB, s Specification) []*HTTPResponse {
 	for _, mob := range mobs {
-		results := readCacheContent(mob, db, s)
+		results := readOriginContent(mob, db, s)
 		for _, result := range results {
 			if result.response != nil {
 				log.Printf("[worker] updated cache to %s, http status code: %s", result.url, result.response.Status)
@@ -128,26 +88,26 @@ func refreshCache(mobs []Mobilization, db *bolt.DB, s Specification) []*HTTPResp
 	return nil
 }
 
-func readCacheContent(mob Mobilization, db *bolt.DB, s Specification) []*HTTPResponse {
+func readOriginContent(mob Mobilization, db *bolt.DB, s Specification) []*HTTPResponse {
 	ch := make(chan *HTTPResponse, 1) // buffered
 	responses := []*HTTPResponse{}
 
 	// log.Printf("Checking if %s || %s <= %f ", time.Now().Format("2006-01-02T15:04:05.000-07:00"), mob.UpdatedAt, interval*3.0)
-	tUpdatedAt, _ := time.Parse("2006-01-02T15:04:05.000-07:00", mob.UpdatedAt)
-	if time.Now().Sub(tUpdatedAt).Seconds() <= s.Interval*3.0 || s.Reset {
-		go func(mob Mobilization) {
-			resp, err := netClient.Get("http://" + mob.Slug + ".bonde.org")
-			// defer resp.Body.Close()
+	// tUpdatedAt, _ := time.Parse("2006-01-02T15:04:05.000-07:00", mob.UpdatedAt)
+	// if time.Now().Sub(tUpdatedAt).Seconds() <= s.Interval*3.0 || s.Reset {
+	go func(mob Mobilization) {
+		resp, err := netClient.Get("http://" + mob.Slug + ".bonde.org")
+		// defer resp.Body.Close()
 
-			if err == nil {
-				saveCacheContent(mob, resp, db)
-			} else {
-				log.Printf("error read response http: %s", err)
-			}
-			ch <- &HTTPResponse{mob.CustomDomain, resp, err}
-		}(mob)
-		time.Sleep(1e9)
-	}
+		if err == nil {
+			saveCacheContent(mob, resp, db)
+		} else {
+			log.Printf("error read response http: %s", err)
+		}
+		ch <- &HTTPResponse{mob.CustomDomain, resp, err}
+	}(mob)
+	time.Sleep(1e9)
+	// }
 
 	for {
 		select {
