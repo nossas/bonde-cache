@@ -42,10 +42,20 @@ var netClient = &http.Client{
 	Transport: netTransport,
 }
 
-func populateCache(db *bolt.DB, s Specification) {
+func populateCache(db *bolt.DB, s Specification, recentOnly bool) {
 	log.Println("[worker] job started")
 	_, mobs := GetUrls(s)
-	writeOriginToCache(mobs, db, s)
+
+	for _, mob := range mobs {
+		if recentOnly {
+			tUpdatedAt, _ := time.Parse("2006-01-02T15:04:05.000-07:00", mob.UpdatedAt)
+			if time.Now().Sub(tUpdatedAt).Seconds() <= s.Interval {
+				writeOriginToCache(mob, db, s)
+			}
+		} else {
+			writeOriginToCache(mob, db, s)
+		}
+	}
 }
 
 // GetUrls serach to domains we must allow to be served
@@ -75,15 +85,13 @@ func GetUrls(s Specification) (customDomains []string, mobs []Mobilization) {
 	return customDomains, mobs
 }
 
-func writeOriginToCache(mobs []Mobilization, db *bolt.DB, s Specification) []*HTTPResponse {
-	for _, mob := range mobs {
-		results := readOriginContent(mob, db, s)
-		for _, result := range results {
-			if result.response != nil {
-				log.Printf("[worker] updated cache to %s, http status code: %s", result.url, result.response.Status)
-			}
-			time.Sleep(1e9)
+func writeOriginToCache(mob Mobilization, db *bolt.DB, s Specification) []*HTTPResponse {
+	results := readOriginContent(mob, db, s)
+	for _, result := range results {
+		if result.response != nil {
+			log.Printf("[worker] updated cache to %s, http status code: %s", result.url, result.response.Status)
 		}
+		time.Sleep(1e9)
 	}
 	return nil
 }

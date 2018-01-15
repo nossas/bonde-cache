@@ -37,8 +37,9 @@ func main() {
 	}
 	defer db.Close()
 
-	gocron.Every(60).Seconds().Do(populateCache, db, s)
+	gocron.Every(60).Seconds().Do(populateCache, db, s, true)
 
+	gocron.Every(1).Day().At("06:00").Do(populateCache, db, s, false)
 	// if s.Reset {
 	// 	_, mobs := GetUrls(s)
 	// 	refreshCache(mobs, db, s)

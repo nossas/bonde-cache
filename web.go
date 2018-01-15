@@ -46,10 +46,7 @@ func ServerCache(db *bolt.DB, spec Specification) {
 	e.GET("/stats", routeStats)
 
 	e.GET("/reset-all", func(c echo.Context) error {
-		_, mobs := GetUrls(spec)
-		spec.Reset = true
-		writeOriginToCache(mobs, db, spec)
-		spec.Reset = false
+		populateCache(db, spec, false)
 		return c.String(http.StatusOK, "Resetting cache")
 	})
 
