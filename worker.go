@@ -48,17 +48,19 @@ func worker(db *bolt.DB, s Specification) {
 	if s.Sync {
 		syncRestoreCertificates(s)
 		syncRestoreDb(s)
-		gocron.Every(30).Seconds().Do(manageCertificate, db, s)
+		gocron.Every(60).Seconds().Do(syncData, db, s)
 	}
 	populateCache(db, s, false)
 	gocron.Every(60).Seconds().Do(populateCache, db, s, true)
 	gocron.Every(1).Day().At("06:00").Do(populateCache, db, s, false)
 }
 
-func manageCertificate(db *bolt.DB, s Specification) {
-	log.Println("[manageCertificate] job started")
-	_, mobs := GetUrls(s)
+func syncData(db *bolt.DB, s Specification) {
+	log.Println("[syncData] job started")
+	syncUpdateCertificates(s)
+	syncUpdateDb(s)
 
+	_, mobs := GetUrls(s)
 	for _, mob := range mobs {
 		var domainContent []byte
 		db.View(func(tx *bolt.Tx) error {
@@ -68,11 +70,9 @@ func manageCertificate(db *bolt.DB, s Specification) {
 		})
 
 		if string(domainContent) == "" {
-			log.Printf("[manageCertificate] domain %s not found at cache. Slug %s update at %s.", mob.CustomDomain, mob.Slug, mob.UpdatedAt)
+			log.Printf("[syncData] domain %s not found at cache. Slug %s update at %s.", mob.CustomDomain, mob.Slug, mob.UpdatedAt)
 			readOriginContent(mob, db, s)
-			syncUpdateCertificates(s)
-			syncUpdateDb(s)
-			time.Sleep(60 * time.Second)
+			time.Sleep(30 * time.Second)
 			pid := os.Getpid()
 			proc, _ := os.FindProcess(pid)
 			proc.Signal(os.Interrupt)
