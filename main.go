@@ -15,7 +15,7 @@ type Specification struct {
 	Interval float64
 	Port     string
 	PortSsl  string
-	ApiUrl   string
+	Domain   string
 }
 
 func main() {

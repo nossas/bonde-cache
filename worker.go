@@ -40,7 +40,7 @@ var netTransport = &http.Transport{
 }
 
 var netClient = &http.Client{
-	Timeout:   time.Second * 10,
+	Timeout:   time.Second * 20,
 	Transport: netTransport,
 }
 
@@ -58,21 +58,27 @@ func manageCertificate(db *bolt.DB, s Specification) {
 
 	for _, mob := range mobs {
 		var domainContent []byte
+		var i = 0
 		db.View(func(tx *bolt.Tx) error {
 			b := tx.Bucket([]byte("cached_urls"))
+			b.ForEach(func(k, v []byte) error {
+				i++
+				return nil
+			})
 			domainContent = b.Get([]byte(mob.CustomDomain))
 			return nil
 		})
 
-		if string(domainContent) == "" {
+		if (string(domainContent) == "") && (i > 1) {
 			log.Printf("[manageCertificate] domain %s not found at cache. Slug %s update at %s.", mob.CustomDomain, mob.Slug, mob.UpdatedAt)
 			readOriginContent(mob, db, s)
 			syncUpdateCertificates(s)
 			syncUpdateDb(s)
-			time.Sleep(60 * time.Second)
 			pid := os.Getpid()
 			proc, _ := os.FindProcess(pid)
 			proc.Signal(os.Interrupt)
+		} else {
+			populateCache(db, s, false)
 		}
 	}
 }
@@ -97,7 +103,7 @@ func populateCache(db *bolt.DB, s Specification, recentOnly bool) {
 func GetUrls(s Specification) (customDomains []string, mobs []Mobilization) {
 	var jsonData []Mobilization
 
-	var r, err = netClient.Get(s.ApiUrl + "/mobilizations")
+	var r, err = netClient.Get("https://api." + s.Domain + "/mobilizations")
 	if err != nil {
 		log.Println("[worker] couldn't reach api server")
 	}
@@ -136,7 +142,7 @@ func readOriginContent(mob Mobilization, db *bolt.DB, s Specification) []*HTTPRe
 	responses := []*HTTPResponse{}
 
 	go func(mob Mobilization) {
-		resp, err := netClient.Get("http://" + mob.Slug + ".bonde.org")
+		resp, err := netClient.Get("http://" + mob.Slug + "." + s.Domain)
 		// defer resp.Body.Close()
 
 		if err == nil {

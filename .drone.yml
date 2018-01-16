@@ -4,7 +4,6 @@ pipeline:
     commands:
       - go get -u github.com/golang/dep/cmd/dep
       - cp -R . /go/src/app && cd /go/src/app && dep ensure
-      - ls -la
       - go build
       - go test
     when:
@@ -15,11 +14,9 @@ pipeline:
     secrets: [ docker_username, docker_password ]
     tags:
       - ${DRONE_BRANCH}
-
     when:
       status: success
       branch: [hotfix-*, release-*, feature-*, develop]
-
   deployment-rancher-staging:
     image: peloton/drone-rancher
     url: http://cluster.bonde.org
