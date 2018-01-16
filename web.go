@@ -44,41 +44,24 @@ func webCache(spec Specification) {
 	e.GET("/stats", routeStats)
 
 	e.GET("/reset-all", func(c echo.Context) error {
-		populateCache(spec, false)
+		// evacuateCache(spec)
 		return c.String(http.StatusOK, "Resetting cache")
 	})
 
 	e.GET("/", func(c echo.Context) error {
 		req := c.Request()
 		host := req.Host
-
-		var mob = redisRead("cached_urls:" + host)
-
-		// v, err := redis.Values(conn.Do("HGETALL", "cached_urls:"+host))
-		// if err != nil {
-		// 	fmt.Println(err)
-		// 	return nil
-		// }
-		// var mob RedisMobilization
-		// if err := redis.ScanStruct(v, &mob); err != nil {
-		// 	fmt.Println(err)
-		// 	return nil
-		// }
-		// var mob2 Mobilization
-		// // var f interface{}
-		// err2 := json.Unmarshal(v, &mob2)
-		// if err2 != nil {
-		// 	return err2
-		// }
-
+		mob := redisRead("cached_urls:" + host)
 		noCache := c.QueryParam("nocache")
+		tCachedAt, _ := time.Parse("2006-01-02T15:04:05.000-07:00", mob.CachedAt)
+
 		if noCache == "1" {
 			readOriginContent(mob, spec)
 			log.Println("Limpando cache..." + mob.Name)
 		}
 
 		if mob.Public {
-			return c.HTML(http.StatusOK, string(mob.Content)+"<!--"+mob.CachedAt.Format(time.RFC3339)+"-->")
+			return c.HTML(http.StatusOK, string(mob.Content)+"<!--"+tCachedAt.Format(time.RFC3339)+"-->")
 		}
 		return c.HTML(http.StatusOK, string("Página não encontrada!"))
 	})

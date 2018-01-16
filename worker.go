@@ -6,7 +6,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/jasonlvhit/gocron"
@@ -14,14 +13,14 @@ import (
 
 // Mobilization is saved as columns into to file
 type Mobilization struct {
-	ID           int       `json:"id" redis:"id"`
-	Name         string    `json:"name" redis:"name"`
-	Content      []byte    `redis:"content"`
-	CachedAt     time.Time `redis:"cached_at"`
-	Slug         string    `json:"slug" redis:"slug"`
-	CustomDomain string    `json:"custom_domain" redis:"custom_domain"`
-	UpdatedAt    string    `json:"updated_at" redis:"updated_at"`
-	Public       bool      `redis:"public"`
+	ID           int    `json:"id" redis:"id"`
+	Name         string `json:"name" redis:"name"`
+	Content      []byte `json: "content" redis:"content"`
+	CachedAt     string `json:"cached_at" redis:"cached_at"`
+	Slug         string `json:"slug" redis:"slug"`
+	CustomDomain string `json:"custom_domain" redis:"custom_domain"`
+	UpdatedAt    string `json:"updated_at" redis:"updated_at"`
+	Public       bool   `json:"public" redis:"public"`
 }
 
 // HTTPResponse helper handle output from requests
@@ -46,42 +45,43 @@ var netClient = &http.Client{
 func worker(s Specification) {
 	if s.Sync {
 		syncRestoreCertificates(s)
-		gocron.Every(60).Seconds().Do(syncData, s)
 	}
-	populateCache(s, false)
-	gocron.Every(60).Seconds().Do(populateCache, s, true)
-	gocron.Every(1).Day().At("06:00").Do(populateCache, s, false)
+	populateCache(s)
+	checkNewCertificates(s)
+	gocron.Every(30).Seconds().Do(populateCache, s)
+	gocron.Every(30).Seconds().Do(checkNewCertificates, s)
 }
 
-func syncData(s Specification) {
-	log.Println("[syncData] job started")
-	syncUpdateCertificates(s)
-
+func checkNewCertificates(s Specification) {
+	log.Println("[checkNewCertificates] job started")
 	_, mobs := GetUrls(s)
 	for _, mob := range mobs {
-		var domainContent = redisRead("cached_urls:" + mob.CustomDomain)
-		if domainContent.Name == "" {
-			log.Printf("[syncData] domain %s not found at cache. Slug %s update at %s.", mob.CustomDomain, mob.Slug, mob.UpdatedAt)
-			readOriginContent(mob, s)
-			time.Sleep(30 * time.Second)
-			pid := os.Getpid()
-			proc, _ := os.FindProcess(pid)
-			proc.Signal(os.Interrupt)
+		var cachedMob = redisRead("cached_urls:" + mob.CustomDomain)
+		if string(cachedMob.Name) == "" {
+			log.Println("[checkNewCertificate] NEW CERT FOUND")
 		}
+
 	}
+	// time.Sleep(30 * time.Second)
+	// pid := os.Getpid()
+	// proc, _ := os.FindProcess(pid)
+	// proc.Signal(os.Interrupt)
 }
 
-func populateCache(s Specification, recentOnly bool) {
+func populateCache(s Specification) {
 	log.Println("[populateCache] job started")
 	_, mobs := GetUrls(s)
 
 	for _, mob := range mobs {
-		if recentOnly {
-			tUpdatedAt, _ := time.Parse("2006-01-02T15:04:05.000-07:00", mob.UpdatedAt)
-			if time.Now().Sub(tUpdatedAt).Seconds() <= s.Interval {
-				writeOriginToCache(mob, s)
-			}
-		} else {
+		var cachedMob = redisRead("cached_urls:" + mob.CustomDomain)
+		tUpdatedAt, _ := time.Parse("2006-01-02T15:04:05.000-07:00", mob.UpdatedAt)
+		tCachedAt, _ := time.Parse("2006-01-02T15:04:05.000-07:00", cachedMob.CachedAt)
+
+		if string(cachedMob.Content) == "" {
+			writeOriginToCache(mob, s)
+		} else if time.Now().Sub(tCachedAt).Hours() >= 168.0 { // 7 days
+			writeOriginToCache(mob, s)
+		} else if time.Now().Sub(tUpdatedAt).Seconds() <= s.Interval {
 			writeOriginToCache(mob, s)
 		}
 	}
@@ -160,7 +160,7 @@ func saveCacheContent(mob Mobilization, resp *http.Response) {
 
 	if err == nil {
 		mob.Content = body
-		mob.CachedAt = time.Now()
+		mob.CachedAt = time.Now().Format("2006-01-02T15:04:05.000-07:00")
 		// encoded, err2 := json.Marshal(mob)
 		// if err2 != nil {
 		// 	log.Printf("[worker] cache can't decode mob %s ", err)

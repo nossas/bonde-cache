@@ -38,12 +38,13 @@ func redisRead(key string) Mobilization {
 	reply, err := redis.Values(conn.Do("HGETALL", key))
 	if err != nil {
 		log.Printf("[worker] can't found key %s into cache: %s", key, err)
-		return value
+		value = Mobilization{Name: ""}
+	} else {
+		if err2 := redis.ScanStruct(reply, &value); err2 != nil {
+			log.Printf("[worker] can't found key %s into cache: %s", key, err2)
+		}
+		log.Printf("[worker] cache updated at %s, reading from www.%s.bonde.org, to be served in %s ", value.CachedAt, value.Slug, value.CustomDomain)
 	}
 
-	if _, err := redis.Scan(reply, &value); err != nil {
-		log.Printf("[worker] can't found key %s into cache: %s", key, err)
-	}
-	log.Printf("[worker] cache updated at %s, reading from www.%s.bonde.org, to be served in %s ", value.CachedAt, value.Slug, value.CustomDomain)
 	return value
 }
