@@ -46,6 +46,7 @@ var netClient = &http.Client{
 
 func worker(db *bolt.DB, s Specification) {
 	if s.Sync {
+		syncRestoreCertificates(s)
 		gocron.Every(30).Seconds().Do(manageCertificate, db, s)
 	}
 	gocron.Every(60).Seconds().Do(populateCache, db, s, true)
