@@ -2,13 +2,11 @@ package main
 
 import (
 	"crypto/tls"
-	"encoding/json"
 	"log"
 	"net/http"
 	"os"
 	"time"
 
-	"github.com/boltdb/bolt"
 	"github.com/facebookgo/grace/gracehttp"
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
@@ -31,7 +29,7 @@ func webRedirect(s Specification) {
 }
 
 // ServerCache Handle HTTPS Certificates
-func webCache(db *bolt.DB, spec Specification) {
+func webCache(spec Specification) {
 	customDomains, _ := GetUrls(spec)
 
 	e := echo.New()
@@ -46,7 +44,7 @@ func webCache(db *bolt.DB, spec Specification) {
 	e.GET("/stats", routeStats)
 
 	e.GET("/reset-all", func(c echo.Context) error {
-		populateCache(db, spec, false)
+		populateCache(spec, false)
 		return c.String(http.StatusOK, "Resetting cache")
 	})
 
@@ -54,27 +52,35 @@ func webCache(db *bolt.DB, spec Specification) {
 		req := c.Request()
 		host := req.Host
 
-		db.View(func(tx *bolt.Tx) error {
-			b := tx.Bucket([]byte("cached_urls"))
-			v := b.Get([]byte(host))
-			var mob Mobilization
-			err := json.Unmarshal(v, &mob)
-			if err != nil {
-				return err
-			}
+		var mob = redisRead("cached_urls:" + host)
 
-			noCache := c.QueryParam("nocache")
-			if noCache == "1" {
-				readOriginContent(mob, db, spec)
-				log.Println("Limpando cache..." + mob.Name)
-			}
+		// v, err := redis.Values(conn.Do("HGETALL", "cached_urls:"+host))
+		// if err != nil {
+		// 	fmt.Println(err)
+		// 	return nil
+		// }
+		// var mob RedisMobilization
+		// if err := redis.ScanStruct(v, &mob); err != nil {
+		// 	fmt.Println(err)
+		// 	return nil
+		// }
+		// var mob2 Mobilization
+		// // var f interface{}
+		// err2 := json.Unmarshal(v, &mob2)
+		// if err2 != nil {
+		// 	return err2
+		// }
 
-			if mob.Public {
-				return c.HTML(http.StatusOK, string(mob.Content)+"<!--"+mob.CachedAt.Format(time.RFC3339)+"-->")
-			}
-			return c.HTML(http.StatusOK, string("Página não encontrada!"))
-		})
-		return nil
+		noCache := c.QueryParam("nocache")
+		if noCache == "1" {
+			readOriginContent(mob, spec)
+			log.Println("Limpando cache..." + mob.Name)
+		}
+
+		if mob.Public {
+			return c.HTML(http.StatusOK, string(mob.Content)+"<!--"+mob.CachedAt.Format(time.RFC3339)+"-->")
+		}
+		return c.HTML(http.StatusOK, string("Página não encontrada!"))
 	})
 
 	e.AutoTLSManager.HostPolicy = autocert.HostWhitelist(customDomains...)

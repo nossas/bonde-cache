@@ -3,7 +3,6 @@ package main
 import (
 	"log"
 
-	"github.com/boltdb/bolt"
 	"github.com/jasonlvhit/gocron"
 	"github.com/kelseyhightower/envconfig"
 )
@@ -16,6 +15,7 @@ type Specification struct {
 	Port     string
 	PortSsl  string
 	Domain   string
+	RedisUrl string
 }
 
 func main() {
@@ -25,15 +25,11 @@ func main() {
 		log.Fatal(err.Error())
 	}
 
-	db, err := bolt.Open("./data/db/bonde-cache.db", 0666, nil)
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-	defer db.Close()
+	pool = newPool(s)
 
 	go webRedirect(s)
-	go webCache(db, s)
+	go webCache(s)
 
-	worker(db, s)
+	worker(s)
 	<-gocron.Start()
 }
