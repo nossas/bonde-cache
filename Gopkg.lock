@@ -38,6 +38,12 @@
   revision = "1b76add642e42c6ffba7211ad7b3939ce654526e"
 
 [[projects]]
+  name = "github.com/garyburd/redigo"
+  packages = ["internal","redis"]
+  revision = "d1ed5c67e5794de818ea85e6b522fda02623a484"
+  version = "v1.4.0"
+
+[[projects]]
   branch = "master"
   name = "github.com/jasonlvhit/gocron"
   packages = ["."]
@@ -106,6 +112,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "c6e8ab94b5259f449b12274c9d06445e950084e4ebf7c55e832e579e49ad20f4"
+  inputs-digest = "57c4b212def891930b987e14d57889db75d0610f83bbebfb6aba6bdaca13143a"
   solver-name = "gps-cdcl"
   solver-version = 1
