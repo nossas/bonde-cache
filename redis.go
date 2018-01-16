@@ -35,7 +35,7 @@ func redisRead(key string) Mobilization {
 	defer conn.Close()
 	var value Mobilization
 
-	reply, err := redis.Values(conn.Do("HMGET", key))
+	reply, err := redis.Values(conn.Do("HGETALL", key))
 	if err != nil {
 		log.Printf("[worker] can't found key %s into cache: %s", key, err)
 		return value
