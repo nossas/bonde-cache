@@ -2,13 +2,11 @@ package main
 
 import (
 	"crypto/tls"
-	"encoding/json"
 	"log"
 	"net/http"
 	"os"
 	"time"
 
-	"github.com/boltdb/bolt"
 	"github.com/facebookgo/grace/gracehttp"
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
@@ -16,7 +14,7 @@ import (
 )
 
 // ServerRedirect Handle Redirect to HTTPS
-func ServerRedirect(s Specification) {
+func webRedirect(s Specification) {
 	ee := echo.New()
 	ee.Pre(middleware.RemoveTrailingSlash())
 	ee.Pre(middleware.HTTPSWWWRedirect())
@@ -31,8 +29,8 @@ func ServerRedirect(s Specification) {
 }
 
 // ServerCache Handle HTTPS Certificates
-func ServerCache(db *bolt.DB, spec Specification) {
-	customDomains, _ := GetUrls()
+func webCache(spec Specification) {
+	customDomains, _ := GetUrls(spec)
 
 	e := echo.New()
 	e.Use(middleware.Logger())
@@ -46,35 +44,26 @@ func ServerCache(db *bolt.DB, spec Specification) {
 	e.GET("/stats", routeStats)
 
 	e.GET("/reset-all", func(c echo.Context) error {
-		_, mobs := GetUrls()
-		spec.Reset = true
-		refreshCache(mobs, db, spec)
-		spec.Reset = false
+		// evacuateCache(spec)
 		return c.String(http.StatusOK, "Resetting cache")
 	})
 
 	e.GET("/", func(c echo.Context) error {
 		req := c.Request()
 		host := req.Host
+		mob := redisRead("cached_urls:" + host)
+		noCache := c.QueryParam("nocache")
+		tCachedAt, _ := time.Parse("2006-01-02T15:04:05.000-07:00", mob.CachedAt)
 
-		db.View(func(tx *bolt.Tx) error {
-			b := tx.Bucket([]byte("cached_urls"))
-			v := b.Get([]byte(host))
-			var mob Mobilization
-			err := json.Unmarshal(v, &mob)
-			if err != nil {
-				return err
-			}
+		if noCache == "1" {
+			readOriginContent(mob, spec)
+			log.Println("Limpando cache..." + mob.Name)
+		}
 
-			noCache := c.QueryParam("nocache")
-			if noCache == "1" {
-				readCacheContent(mob, db, spec)
-			}
-
-			c.HTML(http.StatusOK, string(mob.Content)+"<!--"+mob.CachedAt.Format(time.RFC3339)+"-->")
-			return nil
-		})
-		return nil
+		if mob.Public {
+			return c.HTML(http.StatusOK, string(mob.Content)+"<!--"+tCachedAt.Format(time.RFC3339)+"-->")
+		}
+		return c.HTML(http.StatusOK, string("Página não encontrada!"))
 	})
 
 	e.AutoTLSManager.HostPolicy = autocert.HostWhitelist(customDomains...)
@@ -101,7 +90,7 @@ func ServerCache(db *bolt.DB, spec Specification) {
 		// },
 	}
 	s.TLSConfig = cfg
-	if spec.Env == "production" {
+	if spec.Env == "production" || spec.Env == "staging" {
 		s.TLSConfig.GetCertificate = e.AutoTLSManager.GetCertificate
 	} else {
 		e.Debug = true

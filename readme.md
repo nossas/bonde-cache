@@ -26,7 +26,7 @@ As ready as possible to shutdown the lights and close the door.
 
 ```
 docker build -t nossas/bonde-cache .
-docker run -it --rm -p 443:443 -v "$PWD":/go/src/app -w /go/src/app -e CACHE_PORT=80 -e PORT=80 -e CACHE_PORTSSL=443 -e CACHE_INTERVAL=20 -e CACHE_RESET=false -e CACHE_ENV=development -e AWS_ACCESS_KEY_ID= -e AWS_SECRET_ACCESS_KEY=  --name bonde-cache-app nossas/bonde-cache app
+docker run -it --rm -p 443:443 -v "$PWD":/go/src/app -w /go/src/app -e CACHE_DOMAIN=staging.bonde.org  -e CACHE_PORT=80 -e PORT=80 -e CACHE_PORTSSL=443 -e CACHE_INTERVAL=20 -e CACHE_SYNC=false -e CACHE_ENV=development -e AWS_ACCESS_KEY_ID= -e AWS_SECRET_ACCESS_KEY=  --name bonde-cache-app nossas/bonde-cache app
 ```
 
 ### Generate self-signed ssl

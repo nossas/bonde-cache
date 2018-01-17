@@ -3,17 +3,19 @@ package main
 import (
 	"log"
 
-	"github.com/boltdb/bolt"
+	"github.com/jasonlvhit/gocron"
 	"github.com/kelseyhightower/envconfig"
 )
 
 // Specification are enviroment variables
 type Specification struct {
 	Env      string
-	Reset    bool
+	Sync     bool
 	Interval float64
 	Port     string
 	PortSsl  string
+	Domain   string
+	RedisUrl string
 }
 
 func main() {
@@ -23,30 +25,11 @@ func main() {
 		log.Fatal(err.Error())
 	}
 
-	restoreCertificates(s)
+	pool = newPool(s)
 
-	if !s.Reset {
-		restoreDb(s)
-	}
+	go webRedirect(s)
+	go webCache(s)
 
-	db, err := bolt.Open("./data/db/bonde-cache.db", 0600, nil)
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-	defer db.Close()
-
-	if s.Reset {
-		_, mobs := GetUrls()
-		refreshCache(mobs, db, s)
-	}
-
-	finish := make(chan bool)
-	done := make(chan bool, 1)
-
-	go ServerRedirect(s)
-	go ServerCache(db, s)
-	go Worker(finish, db, s)
-	<-done
-
-	<-finish
+	worker(s)
+	<-gocron.Start()
 }

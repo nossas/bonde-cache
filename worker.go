@@ -6,21 +6,21 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"os"
 	"time"
 
-	"github.com/boltdb/bolt"
+	"github.com/jasonlvhit/gocron"
 )
 
 // Mobilization is saved as columns into to file
 type Mobilization struct {
-	ID           int    `json:"id"`
-	Name         string `json:"name"`
-	Content      []byte
-	CachedAt     time.Time
-	Slug         string `json:"slug"`
-	CustomDomain string `json:"custom_domain"`
-	UpdatedAt    string `json:"updated_at"`
+	ID           int    `json:"id" redis:"id"`
+	Name         string `json:"name" redis:"name"`
+	Content      []byte `json: "content" redis:"content"`
+	CachedAt     string `json:"cached_at" redis:"cached_at"`
+	Slug         string `json:"slug" redis:"slug"`
+	CustomDomain string `json:"custom_domain" redis:"custom_domain"`
+	UpdatedAt    string `json:"updated_at" redis:"updated_at"`
+	Public       bool   `json:"public" redis:"public"`
 }
 
 // HTTPResponse helper handle output from requests
@@ -38,60 +38,63 @@ var netTransport = &http.Transport{
 }
 
 var netClient = &http.Client{
-	Timeout:   time.Second * 10,
+	Timeout:   time.Second * 20,
 	Transport: netTransport,
 }
 
-// Worker enquee refresh cache to run between intervals
-func Worker(done chan bool, db *bolt.DB, s Specification) {
-	ticker := time.NewTicker(time.Duration(s.Interval) * time.Second)
-	quit := make(chan struct{})
-	log.Println("[worker] job started")
+func worker(s Specification) {
+	if s.Sync {
+		syncRestoreCertificates(s)
+	}
+	populateCache(s)
+	checkNewCertificates(s)
+	gocron.Every(30).Seconds().Do(populateCache, s)
+	gocron.Every(30).Seconds().Do(checkNewCertificates, s)
+}
 
-	go func() {
-		for {
-			select {
-			case <-ticker.C:
-				_, mobs := GetUrls()
-				for _, mob := range mobs {
-					var domainContent []byte
-					db.View(func(tx *bolt.Tx) error {
-						b := tx.Bucket([]byte("cached_urls"))
-						domainContent = b.Get([]byte(mob.CustomDomain))
-						return nil
-					})
-
-					if string(domainContent) == "" {
-						log.Printf("[worker] domain %s not found at cache. Slug %s update at %s.", mob.CustomDomain, mob.Slug, mob.UpdatedAt)
-						s.Reset = true
-						readCacheContent(mob, db, s)
-						updateCertificates(s)
-						updateDb(s)
-						time.Sleep(5 * time.Second)
-						pid := os.Getpid()
-						proc, _ := os.FindProcess(pid)
-						proc.Signal(os.Interrupt)
-					}
-
-				}
-				s.Reset = false
-				refreshCache(mobs, db, s)
-			case <-quit:
-				ticker.Stop()
-				// done <- true
-				return
-			}
+func checkNewCertificates(s Specification) {
+	log.Println("[checkNewCertificates] job started")
+	_, mobs := GetUrls(s)
+	for _, mob := range mobs {
+		var cachedMob = redisRead("cached_urls:" + mob.CustomDomain)
+		if string(cachedMob.Name) == "" {
+			log.Println("[checkNewCertificate] NEW CERT FOUND")
 		}
-	}()
 
-	done <- true
+	}
+	// time.Sleep(30 * time.Second)
+	// pid := os.Getpid()
+	// proc, _ := os.FindProcess(pid)
+	// proc.Signal(os.Interrupt)
+}
+
+func populateCache(s Specification) {
+	log.Println("[populateCache] job started")
+	_, mobs := GetUrls(s)
+
+	for _, mob := range mobs {
+		var cachedMob = redisRead("cached_urls:" + mob.CustomDomain)
+		tUpdatedAt, _ := time.Parse("2006-01-02T15:04:05.000-07:00", mob.UpdatedAt)
+		tCachedAt, _ := time.Parse("2006-01-02T15:04:05.000-07:00", cachedMob.CachedAt)
+
+		if string(cachedMob.Content) == "" {
+			writeOriginToCache(mob, s)
+		} else if time.Now().Sub(tCachedAt).Hours() >= 168.0 { // 7 days
+			writeOriginToCache(mob, s)
+		} else if time.Now().Sub(tUpdatedAt).Seconds() <= s.Interval {
+			writeOriginToCache(mob, s)
+		}
+	}
 }
 
 // GetUrls serach to domains we must allow to be served
-func GetUrls() (customDomains []string, mobs []Mobilization) {
+func GetUrls(s Specification) (customDomains []string, mobs []Mobilization) {
 	var jsonData []Mobilization
 
-	var r, _ = netClient.Get("https://api.bonde.org/mobilizations")
+	var r, err = netClient.Get("https://api." + s.Domain + "/mobilizations")
+	if err != nil {
+		log.Println("[worker] couldn't reach api server")
+	}
 	defer r.Body.Close()
 
 	var jsonDataFromHTTP, _ = ioutil.ReadAll(r.Body)
@@ -101,47 +104,44 @@ func GetUrls() (customDomains []string, mobs []Mobilization) {
 	customDomains = make([]string, 0)
 
 	for _, jd := range jsonData {
+		jd.Public = false
 		if jd.CustomDomain != "" {
 			customDomains = append(customDomains, jd.CustomDomain)
+			jd.Public = true
 			mobs = append(mobs, jd)
 		}
 	}
 	return customDomains, mobs
 }
 
-func refreshCache(mobs []Mobilization, db *bolt.DB, s Specification) []*HTTPResponse {
-	for _, mob := range mobs {
-		results := readCacheContent(mob, db, s)
-		for _, result := range results {
-			if result.response != nil {
-				log.Printf("[worker] updated cache to %s, http status code: %s", result.url, result.response.Status)
-			}
-			time.Sleep(1e9)
+func writeOriginToCache(mob Mobilization, s Specification) []*HTTPResponse {
+	results := readOriginContent(mob, s)
+	for _, result := range results {
+		if result.response != nil {
+			log.Printf("[worker] updated cache to %s, http status code: %s", result.url, result.response.Status)
 		}
+		time.Sleep(1e9)
 	}
 	return nil
 }
 
-func readCacheContent(mob Mobilization, db *bolt.DB, s Specification) []*HTTPResponse {
+func readOriginContent(mob Mobilization, s Specification) []*HTTPResponse {
 	ch := make(chan *HTTPResponse, 1) // buffered
 	responses := []*HTTPResponse{}
 
-	// log.Printf("Checking if %s || %s <= %f ", time.Now().Format("2006-01-02T15:04:05.000-07:00"), mob.UpdatedAt, interval*3.0)
-	tUpdatedAt, _ := time.Parse("2006-01-02T15:04:05.000-07:00", mob.UpdatedAt)
-	if time.Now().Sub(tUpdatedAt).Seconds() <= s.Interval*3.0 || s.Reset {
-		go func(mob Mobilization) {
-			resp, err := netClient.Get("http://" + mob.Slug + ".bonde.org")
-			// defer resp.Body.Close()
+	go func(mob Mobilization) {
+		resp, err := netClient.Get("http://" + mob.Slug + "." + s.Domain)
+		// defer resp.Body.Close()
 
-			if err == nil {
-				saveCacheContent(mob, resp, db)
-			} else {
-				log.Printf("error read response http: %s", err)
-			}
-			ch <- &HTTPResponse{mob.CustomDomain, resp, err}
-		}(mob)
-		time.Sleep(1e9)
-	}
+		if err == nil {
+			saveCacheContent(mob, resp)
+		} else {
+			log.Printf("error read response http: %s", err)
+		}
+		ch <- &HTTPResponse{mob.CustomDomain, resp, err}
+	}(mob)
+	time.Sleep(1e9)
+	// }
 
 	for {
 		select {
@@ -155,34 +155,17 @@ func readCacheContent(mob Mobilization, db *bolt.DB, s Specification) []*HTTPRes
 	}
 }
 
-func saveCacheContent(mob Mobilization, resp *http.Response, db *bolt.DB) {
+func saveCacheContent(mob Mobilization, resp *http.Response) {
 	body, err := ioutil.ReadAll(resp.Body)
 
 	if err == nil {
-		err := db.Update(func(tx *bolt.Tx) error {
-			b, err := tx.CreateBucketIfNotExists([]byte("cached_urls"))
-			if err != nil {
-				log.Printf("error create cache bucket: %s", err)
-			}
-			mob.Content = body
-			mob.CachedAt = time.Now()
-			encoded, err := json.Marshal(mob)
-			if err != nil {
-				log.Printf("[worker] cache can't decode mob %s ", err)
-			}
-
-			err = b.Put([]byte(mob.CustomDomain), encoded)
-			if err != nil {
-				log.Printf("[worker] cache can't update local db %s ", mob.CustomDomain)
-			} else {
-				log.Printf("[worker] cache updated at %s, reading from www.%s.bonde.org, to be served in %s ", mob.CachedAt, mob.Slug, mob.CustomDomain)
-			}
-
-			return nil
-		})
-		if err != nil {
-			log.Printf("error save content %s", err)
-		}
+		mob.Content = body
+		mob.CachedAt = time.Now().Format("2006-01-02T15:04:05.000-07:00")
+		// encoded, err2 := json.Marshal(mob)
+		// if err2 != nil {
+		// 	log.Printf("[worker] cache can't decode mob %s ", err)
+		// }
+		redisSave("cached_urls:"+mob.CustomDomain, mob)
 	} else {
 		log.Printf("error read response body: %s", err)
 	}
