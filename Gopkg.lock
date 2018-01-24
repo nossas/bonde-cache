@@ -123,6 +123,18 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/shurcooL/go"
+  packages = ["ctxhttp"]
+  revision = "004faa6b0118cf52635363b72b51cdcc297800a2"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/shurcooL/graphql"
+  packages = [".","ident","internal/jsonutil"]
+  revision = "d0549edd16dceb6939e538fdb1b4f2ec7ee816cc"
+
+[[projects]]
+  branch = "master"
   name = "github.com/thoas/stats"
   packages = ["."]
   revision = "37829025d2242afb04d91572cb143e00019e2aac"
@@ -147,13 +159,31 @@
 
 [[projects]]
   branch = "master"
+  name = "golang.org/x/net"
+  packages = ["context","context/ctxhttp"]
+  revision = "0ed95abb35c445290478a5348a7b38bb154135fd"
+
+[[projects]]
+  branch = "master"
+  name = "golang.org/x/oauth2"
+  packages = [".","internal"]
+  revision = "b28fcf2b08a19742b43084fb40ab78ac6c3d8067"
+
+[[projects]]
+  branch = "master"
   name = "golang.org/x/sys"
   packages = ["unix"]
   revision = "af50095a40f9041b3b38960738837185c26e9419"
 
+[[projects]]
+  name = "google.golang.org/appengine"
+  packages = ["internal","internal/base","internal/datastore","internal/log","internal/remote_api","internal/urlfetch","urlfetch"]
+  revision = "150dc57a1b433e64154302bdc40b6bb8aefa313a"
+  version = "v1.0.0"
+
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "33970b4d7fcab1531c11cfa57a0431a48196900759c010718ad35b0594affd45"
+  inputs-digest = "3de120732f2cde2fe1d5c6530981365b61eca189fbb284dc40b003b53809458f"
   solver-name = "gps-cdcl"
   solver-version = 1
