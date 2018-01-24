@@ -2,10 +2,10 @@
 
 
 [[projects]]
-  name = "github.com/boltdb/bolt"
-  packages = ["."]
-  revision = "2f1ce7a837dcb8da3ec595b1dac9d0632f0f99e8"
-  version = "v1.3.1"
+  branch = "master"
+  name = "github.com/beorn7/perks"
+  packages = ["quantile"]
+  revision = "4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9"
 
 [[projects]]
   name = "github.com/dgrijalva/jwt-go"
@@ -45,9 +45,21 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/golang/protobuf"
+  packages = ["proto"]
+  revision = "c65a0412e71e8b9b3bfd22925720d23c0f054237"
+
+[[projects]]
+  branch = "master"
   name = "github.com/jasonlvhit/gocron"
   packages = ["."]
   revision = "3c914c8681c3998f1dd463d84a4d8c29345e47a4"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/joeguo/tldextract"
+  packages = ["."]
+  revision = "98a8d4207a01c2990a1648bc2b2683f9725241cf"
 
 [[projects]]
   name = "github.com/kelseyhightower/envconfig"
@@ -80,6 +92,36 @@
   version = "v0.0.3"
 
 [[projects]]
+  name = "github.com/matttproud/golang_protobuf_extensions"
+  packages = ["pbutil"]
+  revision = "3247c84500bff8d9fb6d579d800f20b3e091582c"
+  version = "v1.0.0"
+
+[[projects]]
+  name = "github.com/prometheus/client_golang"
+  packages = ["prometheus","prometheus/promhttp"]
+  revision = "c5b7fccd204277076155f10851dad72b76a49317"
+  version = "v0.8.0"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/prometheus/client_model"
+  packages = ["go"]
+  revision = "99fa1f4be8e564e8a6b613da7fa6f46c9edafc6c"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/prometheus/common"
+  packages = ["expfmt","internal/bitbucket.org/ww/goautoneg","model"]
+  revision = "89604d197083d4781071d3c65855d24ecfb0a563"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/prometheus/procfs"
+  packages = [".","internal/util","nfsd","xfs"]
+  revision = "85fadb6e89903ef7cca6f6a804474cd5ea85b6e1"
+
+[[projects]]
   branch = "master"
   name = "github.com/thoas/stats"
   packages = ["."]
@@ -101,17 +143,17 @@
   branch = "master"
   name = "golang.org/x/crypto"
   packages = ["acme","acme/autocert"]
-  revision = "13931e22f9e72ea58bb73048bc752b48c6d4d4ac"
+  revision = "3d37316aaa6bd9929127ac9a527abf408178ea7b"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/sys"
   packages = ["unix"]
-  revision = "fff93fa7cd278d84afc205751523809c464168ab"
+  revision = "af50095a40f9041b3b38960738837185c26e9419"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "57c4b212def891930b987e14d57889db75d0610f83bbebfb6aba6bdaca13143a"
+  inputs-digest = "33970b4d7fcab1531c11cfa57a0431a48196900759c010718ad35b0594affd45"
   solver-name = "gps-cdcl"
   solver-version = 1

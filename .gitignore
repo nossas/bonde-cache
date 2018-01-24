@@ -7,3 +7,5 @@ gin-bin
 *.crt
 app
 debug
+data/*
+.lego

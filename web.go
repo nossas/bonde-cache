@@ -10,11 +10,12 @@ import (
 	"github.com/facebookgo/grace/gracehttp"
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"golang.org/x/crypto/acme/autocert"
 )
 
-// ServerRedirect Handle Redirect to HTTPS
-func webRedirect(s Specification) {
+// WebRedirect Handle Redirect to HTTPS
+func WebRedirect(s Specification) {
 	ee := echo.New()
 	ee.Pre(middleware.RemoveTrailingSlash())
 	ee.Pre(middleware.HTTPSWWWRedirect())
@@ -28,8 +29,8 @@ func webRedirect(s Specification) {
 	ee.Logger.Fatal(gracehttp.Serve(ee.Server))
 }
 
-// ServerCache Handle HTTPS Certificates
-func webCache(spec Specification) {
+// WebCache Handle HTTPS Certificates - Show Mob or Error Page
+func WebCache(spec Specification) {
 	customDomains, _ := GetUrls(spec)
 
 	e := echo.New()
@@ -41,7 +42,7 @@ func webCache(spec Specification) {
 	e.Pre(middleware.WWWRedirect())
 	e.HTTPErrorHandler = CustomHTTPErrorHandler
 
-	e.GET("/stats", routeStats)
+	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
 
 	e.GET("/reset-all", func(c echo.Context) error {
 		// evacuateCache(spec)
@@ -51,12 +52,12 @@ func webCache(spec Specification) {
 	e.GET("/", func(c echo.Context) error {
 		req := c.Request()
 		host := req.Host
-		mob := redisRead("cached_urls:" + host)
+		mob := RedisReadMobilization("cached_urls:" + host)
 		noCache := c.QueryParam("nocache")
 		tCachedAt, _ := time.Parse("2006-01-02T15:04:05.000-07:00", mob.CachedAt)
 
 		if noCache == "1" {
-			readOriginContent(mob, spec)
+			readHTMLFromHTTPAndSaveToRedis(mob, spec)
 			log.Println("Limpando cache..." + mob.Name)
 		}
 
@@ -89,6 +90,7 @@ func webCache(spec Specification) {
 		// 	tls.TLS_RSA_WITH_AES_256_CBC_SHA,
 		// },
 	}
+	// 1.
 	s.TLSConfig = cfg
 	if spec.Env == "production" || spec.Env == "staging" {
 		s.TLSConfig.GetCertificate = e.AutoTLSManager.GetCertificate
