@@ -15,7 +15,7 @@ type Specification struct {
 	Port     string
 	PortSsl  string
 	Domain   string
-	RedisUrl string
+	RedisURL string
 }
 
 func main() {
@@ -25,11 +25,11 @@ func main() {
 		log.Fatal(err.Error())
 	}
 
-	pool = newPool(s)
+	pool = RedisPool(s)
 
-	go webRedirect(s)
-	go webCache(s)
+	go WebRedirect(s)
+	go WebCache(s)
 
-	worker(s)
+	Worker(s)
 	<-gocron.Start()
 }
