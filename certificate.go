@@ -2,25 +2,24 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log"
 
 	"github.com/joeguo/tldextract"
 )
 
-func generateNewCertificates() []byte {
-	content, err := ioutil.ReadFile("testdata/hello")
-	if err != nil {
-		log.Fatal(err)
-	}
+// func generateNewCertificates() []byte {
+// 	content, err := ioutil.ReadFile("testdata/hello")
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
 
-	fmt.Printf("File contents: %s", content)
+// 	fmt.Printf("File contents: %s", content)
 
-	return content
+// 	return content
 
-	// tentar criar com desafio dns do lets encrypt, salva na api-microservice
+// 	// tentar criar com desafio dns do lets encrypt, salva na api-microservice
 
-}
+// }
 
 // ler da api-microservice, salva no redis e cria como arquivo
 // checa certificados encontrados no redis existem como arquivo
@@ -46,7 +45,7 @@ func populateCertificates(s Specification) {
 		var cachedCert = RedisReadMobilization("cached_certificates:" + rootDomain.Root)
 		if string(cachedCert.Name) == "" {
 			log.Println("[populateCertificate] NEW CERT FOUND")
-			generateNewCertificates()
+			// generateNewCertificates()
 		} else {
 
 		}

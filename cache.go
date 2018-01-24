@@ -1,14 +1,49 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
+	"os"
 	"time"
+
+	"github.com/shurcooL/graphql"
 )
+
+func printJSON(v interface{}) {
+	w := json.NewEncoder(os.Stdout)
+	w.SetIndent("", "\t")
+	err := w.Encode(v)
+	if err != nil {
+		panic(err)
+	}
+}
 
 // GetUrls search to domains we must allow to be public
 func GetUrls(s Specification) (customDomains []string, mobs []Mobilization) {
+
+	var query struct {
+		AllMobilizations struct {
+			Edges []struct {
+				Node struct {
+					ID          graphql.Int `graphql:"id"`
+					CommunityID graphql.Int `graphql:"communityId"`
+					Name        graphql.String
+					Slug        graphql.String
+				}
+				Cursor graphql.String
+			}
+		} `graphql:"allMobilizations"`
+	}
+
+	err2 := client.Query(context.Background(), &query, nil)
+	if err2 != nil {
+		fmt.Println("Error querying api services: ", err2)
+	}
+	printJSON(query)
+
 	var jsonData []Mobilization
 
 	var r, err = netClient.Get("https://api." + s.Domain + "/mobilizations")
