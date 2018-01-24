@@ -27,12 +27,7 @@ func GetUrls(s Specification) (customDomains []string, mobs []Mobilization) {
 	var query struct {
 		AllMobilizations struct {
 			Edges []struct {
-				Node struct {
-					ID          graphql.Int `graphql:"id"`
-					CommunityID graphql.Int `graphql:"communityId"`
-					Name        graphql.String
-					Slug        graphql.String
-				}
+				Node   Mobilization
 				Cursor graphql.String
 			}
 		} `graphql:"allMobilizations"`
@@ -42,23 +37,13 @@ func GetUrls(s Specification) (customDomains []string, mobs []Mobilization) {
 	if err2 != nil {
 		fmt.Println("Error querying api services: ", err2)
 	}
-	printJSON(query)
-
-	var jsonData []Mobilization
-
-	var r, err = netClient.Get("https://api." + s.Domain + "/mobilizations")
-	if err != nil {
-		log.Println("[worker] couldn't reach api server")
-	}
-	defer r.Body.Close()
-
-	var jsonDataFromHTTP, _ = ioutil.ReadAll(r.Body)
-	json.Unmarshal([]byte(jsonDataFromHTTP), &jsonData) // here!
+	// printJSON(query)
 
 	mobs = make([]Mobilization, 0)
 	customDomains = make([]string, 0)
 
-	for _, jd := range jsonData {
+	for _, node := range query.AllMobilizations.Edges {
+		var jd = node.Node
 		jd.Public = false
 		if jd.CustomDomain != "" {
 			customDomains = append(customDomains, jd.CustomDomain)
