@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log"
+	"os"
 
 	"github.com/jasonlvhit/gocron"
 	"github.com/kelseyhightower/envconfig"
@@ -49,4 +51,13 @@ func main() {
 
 	Worker(s)
 	<-gocron.Start()
+}
+
+func printJSON(v interface{}) {
+	w := json.NewEncoder(os.Stdout)
+	w.SetIndent("", "\t")
+	err := w.Encode(v)
+	if err != nil {
+		panic(err)
+	}
 }
