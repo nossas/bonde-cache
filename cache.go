@@ -1,16 +1,19 @@
 package main
 
 import (
-	"context"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
 	"time"
-
-	"github.com/shurcooL/graphql"
 )
+
+// Cache is responsible to manager mob content
+type CacheManager struct {
+	s Specification
+	g *Graphql
+	r *Redis
+}
 
 // Mobilization is cached at Redis
 type Mobilization struct {
@@ -45,48 +48,36 @@ var netClient = &http.Client{
 	Transport: netTransport,
 }
 
-// Load Mobilization Content and Save To Redis
-func populateCache(s Specification) {
-	log.Println("[populateCache] job started")
-	_, mobs := GetUrls(s)
+// Populate will load Mobilization Content and Save To Redis if necessary
+func (c *CacheManager) Populate() {
+	log.Println("[populate_cache] job started")
+	_, mobs := c.GetAllowedDomains()
 
 	for _, mob := range mobs {
-		var cachedMob = RedisReadMobilization("cached_urls:" + mob.CustomDomain)
+		var cachedMob = c.r.ReadMobilization("cached_urls:" + mob.CustomDomain)
 		tUpdatedAt, _ := time.Parse("2006-01-02T15:04:05.000-07:00", mob.UpdatedAt)
 		tCachedAt, _ := time.Parse("2006-01-02T15:04:05.000-07:00", cachedMob.CachedAt)
 
 		if string(cachedMob.Content) == "" {
-			readHTMLFromHTTPAndSaveToRedis(mob, s)
+			c.readHTMLFromHTTPAndSaveToRedis(mob, c.s)
 		} else if time.Now().Sub(tCachedAt).Hours() >= 168.0 { // 7 days
-			readHTMLFromHTTPAndSaveToRedis(mob, s)
-		} else if time.Now().Sub(tUpdatedAt).Seconds() <= s.Interval {
-			readHTMLFromHTTPAndSaveToRedis(mob, s)
+			c.readHTMLFromHTTPAndSaveToRedis(mob, c.s)
+		} else if time.Now().Sub(tUpdatedAt).Seconds() <= c.s.Interval {
+			c.readHTMLFromHTTPAndSaveToRedis(mob, c.s)
 		}
 	}
 }
 
 // GetUrls search to domains we must allow to be public
-func GetUrls(s Specification) (customDomains []string, mobs []Mobilization) {
+func (c *CacheManager) GetAllowedDomains() (customDomains []string, mobs []Mobilization) {
 
-	var query struct {
-		AllMobilizations struct {
-			Edges []struct {
-				Node   Mobilization
-				Cursor graphql.String
-			}
-		} `graphql:"allMobilizations"`
-	}
-
-	err2 := client.Query(context.Background(), &query, nil)
-	if err2 != nil {
-		fmt.Println("Error querying api services: ", err2)
-	}
-	// printJSON(query)
+	c.g.GetAllMobilizations()
+	var q = c.g.queryAllMobilizations
 
 	mobs = make([]Mobilization, 0)
 	customDomains = make([]string, 0)
 
-	for _, node := range query.AllMobilizations.Edges {
+	for _, node := range q.AllMobilizations.Edges {
 		var jd = node.Node
 		jd.Public = false
 		if jd.CustomDomain != "" {
@@ -98,7 +89,7 @@ func GetUrls(s Specification) (customDomains []string, mobs []Mobilization) {
 	return customDomains, mobs
 }
 
-func readHTMLFromHTTPAndSaveToRedis(mob Mobilization, s Specification) []*HTTPResponse {
+func (c *CacheManager) readHTMLFromHTTPAndSaveToRedis(mob Mobilization, s Specification) []*HTTPResponse {
 	ch := make(chan *HTTPResponse, 1) // buffered
 	responses := []*HTTPResponse{}
 
@@ -112,7 +103,7 @@ func readHTMLFromHTTPAndSaveToRedis(mob Mobilization, s Specification) []*HTTPRe
 		}
 		mob.Content = body
 		mob.CachedAt = time.Now().Format("2006-01-02T15:04:05.000-07:00")
-		RedisSaveMobilization("cached_urls:"+mob.CustomDomain, mob)
+		c.r.SaveMobilization("cached_urls:"+mob.CustomDomain, mob)
 	} else {
 		log.Printf("error read response http: %s", err)
 	}

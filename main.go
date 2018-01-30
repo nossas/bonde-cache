@@ -1,15 +1,12 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"log"
 	"os"
 
 	"github.com/jasonlvhit/gocron"
 	"github.com/kelseyhightower/envconfig"
-	"github.com/shurcooL/graphql"
-	"golang.org/x/oauth2"
 )
 
 // Specification are enviroment variables
@@ -25,31 +22,26 @@ type Specification struct {
 	APIServiceToken string
 }
 
-var s Specification
-var (
-	client *graphql.Client
-)
-
 func main() {
+	var s Specification
 
 	err := envconfig.Process("cache", &s)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 
-	src := oauth2.StaticTokenSource(
-		&oauth2.Token{AccessToken: s.APIServiceToken},
-	)
-	httpClient := oauth2.NewClient(context.Background(), src)
+	g := &Graphql{s: s}
+	r := &Redis{s: s}
+	web := &Web{s: s, g: g, r: r}
+	worker := &Worker{s: s, g: g, r: r}
 
-	client = graphql.NewClient(s.APIServiceURL, httpClient)
+	g.CreateClient()
+	r.CreatePool()
 
-	pool = RedisPool(s)
+	go web.StartNonSSL()
+	go web.StartSSL()
 
-	go WebRedirect(s)
-	go WebCache(s)
-
-	Worker(s)
+	worker.Start()
 	<-gocron.Start()
 }
 

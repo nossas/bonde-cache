@@ -1,13 +1,11 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"io/ioutil"
 	"log"
 
 	"github.com/joeguo/tldextract"
-	"github.com/shurcooL/graphql"
 )
 
 // DnsHostedZone represent valid root domain with dns verified
@@ -34,6 +32,13 @@ type Certificate struct {
 	IsActive        bool   `json:"is_active" redis:"is_active" graphql:"is_active"`
 	CreatedAt       string `json:"created_at" redis:"created_at" graphql:"createdAt"`
 	UpdatedAt       string `json:"updated_at" redis:"updated_at" graphql:"updatedAt"`
+}
+
+// Certs handle async files to use at web server
+type CertManager struct {
+	s Specification
+	r *Redis
+	g *Graphql
 }
 
 // func generateCertificates() []byte {
@@ -67,67 +72,30 @@ func removeDuplicates(elements []string) []string {
 }
 
 // Load Certificate or generate a one if new domain created
-func populateCertificates(s Specification) {
-	log.Println("[populateCertificates] job started")
-
-	var query struct {
-		AllMobilizations struct {
-			Edges []struct {
-				Node   Mobilization
-				Cursor graphql.String
-			}
-		} `graphql:"allMobilizations"`
-	}
-	err2 := client.Query(context.Background(), &query, nil)
-	if err2 != nil {
-		fmt.Println("Error querying api services: ", err2)
-	}
-
-	var query2 struct {
-		AllDnsHostedZones struct {
-			Edges []struct {
-				Node   DnsHostedZone
-				Cursor graphql.String
-			}
-		} `graphql:"allDnsHostedZones"`
-	}
-	err3 := client.Query(context.Background(), &query2, nil)
-	if err3 != nil {
-		fmt.Println("Error querying api services: ", err3)
-	}
-
-	var query3 struct {
-		AllCertificates struct {
-			Edges []struct {
-				Node   Certificate
-				Cursor graphql.String
-			}
-		} `graphql:"allCertificates"`
-	}
-	err4 := client.Query(context.Background(), &query3, nil)
-	if err2 != nil {
-		fmt.Println("Error querying api services: ", err4)
-	}
-	// printJSON(query3)
+func (certManager *CertManager) Populate(s Specification) {
+	log.Println("[populate_cert_manager] job started")
 
 	cache := "/tmp/tld.cache"
 	extract, _ := tldextract.New(cache, false)
-
 	var domainsAvailableCertificate []string
-	for _, mob := range query2.AllDnsHostedZones.Edges {
+
+	var q = certManager.g.GetAllDNSHostedZones()
+	for _, mob := range q.queryAllDNSHostedZones.AllDnsHostedZones.Edges {
 		rootDomain := extract.Extract(mob.Node.DomainName)
 		var d = rootDomain.Root + "." + rootDomain.Tld
 		domainsAvailableCertificate = append(domainsAvailableCertificate, d)
 	}
 
-	for _, mob := range query3.AllCertificates.Edges {
+	q = certManager.g.GetAllCertificates()
+	for _, mob := range q.queryAllCertificates.AllCertificates.Edges {
 		rootDomain := extract.Extract(mob.Node.Domain)
 		var d = rootDomain.Root + "." + rootDomain.Tld
 		domainsAvailableCertificate = append(domainsAvailableCertificate, d)
 		// write certificate file content do disk
 	}
 
-	for _, mob := range query.AllMobilizations.Edges {
+	q = certManager.g.GetAllMobilizations()
+	for _, mob := range q.queryAllMobilizations.AllMobilizations.Edges {
 		rootDomain := extract.Extract(mob.Node.CustomDomain)
 		var d = rootDomain.Root + "." + rootDomain.Tld
 		for _, v := range domainsAvailableCertificate {

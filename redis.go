@@ -7,38 +7,46 @@ import (
 	"github.com/garyburd/redigo/redis"
 )
 
-// RedisPool are responsible to ensure we have at least three redis active connections
-func RedisPool(s Specification) *redis.Pool {
-	return &redis.Pool{
-		MaxIdle:     3,
-		IdleTimeout: 240 * time.Second,
-		Dial:        func() (redis.Conn, error) { return redis.DialURL(s.RedisURL) },
-	}
+// Redis main struct
+type Redis struct {
+	s    Specification
+	pool *redis.Pool
 }
 
-var (
-	pool *redis.Pool
-)
+// CreatePool are responsible to ensure we have at least three redis active connections
+func (r *Redis) CreatePool() *Redis {
+	r.pool = &redis.Pool{
+		MaxIdle:     3,
+		IdleTimeout: 240 * time.Second,
+		Dial: func() (redis.Conn, error) {
+			return redis.DialURL(r.s.RedisURL)
+		},
+	}
+	return r
+}
 
-// RedisSaveMobilization is used to save Mobilization cached content
-func RedisSaveMobilization(key string, value Mobilization) {
-	conn := pool.Get()
+// SaveMobilization is used to save Mobilization cached content
+func (r *Redis) SaveMobilization(key string, value Mobilization) bool {
+	conn := r.pool.Get()
 	defer conn.Close()
 
 	if value.Name == "" {
 		log.Printf("Empty mobilization.")
+		return false
 	}
 
 	if _, err := conn.Do("HMSET", redis.Args{}.Add(key).AddFlat(value)...); err != nil {
 		log.Printf("[worker] cache can't update local db %s: %s", key, err)
-		return
+		return false
 	}
+
 	log.Printf("[worker] cache updated at %s, reading from www.%s.bonde.org, to be served in %s ", value.CachedAt, value.Slug, value.CustomDomain)
+	return true
 }
 
-// RedisReadMobilization Load Mobilization From Redis based on key
-func RedisReadMobilization(key string) Mobilization {
-	conn := pool.Get()
+// ReadMobilization Load Mobilization From Redis based on key
+func (r *Redis) ReadMobilization(key string) Mobilization {
+	conn := r.pool.Get()
 	defer conn.Close()
 	var value Mobilization
 
@@ -49,6 +57,7 @@ func RedisReadMobilization(key string) Mobilization {
 	} else {
 		if err2 := redis.ScanStruct(reply, &value); err2 != nil {
 			log.Printf("[worker] can't found key %s into cache: %s", key, err2)
+			value = Mobilization{Name: ""}
 		}
 	}
 

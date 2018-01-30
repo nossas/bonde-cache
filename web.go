@@ -14,24 +14,39 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-// WebRedirect Handle Redirect to HTTPS
-func WebRedirect(s Specification) {
+// Web struct to start server
+type Web struct {
+	s                      Specification
+	r                      *Redis
+	g                      *Graphql
+	CustomHTTPErrorHandler echo.HTTPErrorHandler
+}
+
+// StartNonSSL Handle Redirect to HTTPS
+func (web *Web) StartNonSSL() {
+
 	ee := echo.New()
 	ee.Pre(middleware.RemoveTrailingSlash())
 	ee.Pre(middleware.HTTPSWWWRedirect())
 	ee.Pre(middleware.HTTPSRedirect())
-	ee.HTTPErrorHandler = CustomHTTPErrorHandler
+	ee.HTTPErrorHandler = web.CustomHTTPErrorHandler
 
 	Log := log.New(os.Stdout, "[server]: ", log.Ldate|log.Ltime|log.Lshortfile)
 	gracehttp.SetLogger(Log)
 
-	ee.Server.Addr = ":" + s.Port
+	ee.Server.Addr = ":" + web.s.Port
 	ee.Logger.Fatal(gracehttp.Serve(ee.Server))
 }
 
-// WebCache Handle HTTPS Certificates - Show Mob or Error Page
-func WebCache(spec Specification) {
-	customDomains, _ := GetUrls(spec)
+// StartSSL Handle HTTPS Certificates - Show Mob or Error Page
+func (web *Web) StartSSL() {
+	var cache = &CacheManager{
+		g: web.g,
+		s: web.s,
+		r: web.r,
+	}
+
+	customDomains, _ := cache.GetAllowedDomains()
 
 	e := echo.New()
 	e.Use(middleware.Logger())
@@ -40,7 +55,7 @@ func WebCache(spec Specification) {
 	e.Use(middleware.BodyLimit("1M"))
 	e.Pre(middleware.RemoveTrailingSlash())
 	e.Pre(middleware.WWWRedirect())
-	e.HTTPErrorHandler = CustomHTTPErrorHandler
+	e.HTTPErrorHandler = web.CustomHTTPErrorHandler
 
 	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
 
@@ -52,14 +67,14 @@ func WebCache(spec Specification) {
 	e.GET("/", func(c echo.Context) error {
 		req := c.Request()
 		host := req.Host
-		mob := RedisReadMobilization("cached_urls:" + host)
-		noCache := c.QueryParam("nocache")
+		mob := web.r.ReadMobilization("cached_urls:" + host)
+		// noCache := c.QueryParam("nocache")
 		tCachedAt, _ := time.Parse("2006-01-02T15:04:05.000-07:00", mob.CachedAt)
 
-		if noCache == "1" {
-			readHTMLFromHTTPAndSaveToRedis(mob, spec)
-			log.Println("Limpando cache..." + mob.Name)
-		}
+		// if noCache == "1" {
+		// 	readHTMLFromHTTPAndSaveToRedis(mob, spec)
+		// 	log.Println("Limpando cache..." + mob.Name)
+		// }
 
 		if mob.Public {
 			return c.HTML(http.StatusOK, string(mob.Content)+"<!--"+tCachedAt.Format(time.RFC3339)+"-->")
@@ -80,19 +95,11 @@ func WebCache(spec Specification) {
 
 	s := e.TLSServer
 	cfg := &tls.Config{
-		// MinVersion:               tls.VersionTLS12,
-		// CurvePreferences:         []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256, tls.X25519},
 		PreferServerCipherSuites: true,
-		// CipherSuites: []uint16{
-		// 	tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-		// 	tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-		// 	tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
-		// 	tls.TLS_RSA_WITH_AES_256_CBC_SHA,
-		// },
 	}
-	// 1.
+
 	s.TLSConfig = cfg
-	if spec.Env == "production" || spec.Env == "staging" {
+	if web.s.Env == "production" || web.s.Env == "staging" {
 		s.TLSConfig.GetCertificate = e.AutoTLSManager.GetCertificate
 	} else {
 		e.Debug = true
@@ -103,7 +110,6 @@ func WebCache(spec Specification) {
 	LogSsl := log.New(os.Stdout, "[server_ssl]: ", log.Ldate|log.Ltime|log.Lshortfile)
 	gracehttp.SetLogger(LogSsl)
 
-	s.Addr = ":" + spec.PortSsl
+	s.Addr = ":" + web.s.PortSsl
 	e.Logger.Fatal(gracehttp.Serve(e.TLSServer))
-
 }
