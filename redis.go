@@ -36,11 +36,11 @@ func (r *Redis) SaveMobilization(key string, value Mobilization) bool {
 	}
 
 	if _, err := conn.Do("HMSET", redis.Args{}.Add(key).AddFlat(value)...); err != nil {
-		log.Printf("[worker] cache can't update local db %s: %s", key, err)
+		log.Printf("[populate_cache] cache can't update local db %s: %s", key, err)
 		return false
 	}
 
-	log.Printf("[worker] cache updated at %s, reading from www.%s.bonde.org, to be served in %s ", value.CachedAt, value.Slug, value.CustomDomain)
+	log.Printf("[populate_cache] cache updated at %s, reading from www.%s.bonde.org, to be served in %s ", value.CachedAt, value.Slug, value.CustomDomain)
 	return true
 }
 
@@ -52,11 +52,11 @@ func (r *Redis) ReadMobilization(key string) Mobilization {
 
 	reply, err := redis.Values(conn.Do("HGETALL", key))
 	if err != nil {
-		log.Printf("[worker] can't found key %s into cache: %s", key, err)
+		log.Printf("[populate_cache] can't found key %s into cache: %s", key, err)
 		value = Mobilization{Name: ""}
 	} else {
 		if err2 := redis.ScanStruct(reply, &value); err2 != nil {
-			log.Printf("[worker] can't found key %s into cache: %s", key, err2)
+			log.Printf("[populate_cache] can't found key %s into cache: %s", key, err2)
 			value = Mobilization{Name: ""}
 		}
 	}

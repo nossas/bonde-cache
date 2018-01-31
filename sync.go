@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"strings"
@@ -15,20 +14,20 @@ var (
 
 func execCommand(command []string) {
 	if len(command) < 2 {
-		log.Println("Invalid Command")
+		fmt.Println("Invalid Command")
 	}
 	cmd := exec.Command(command[0], command[1:]...)
 	cmd.Env = os.Environ()
 	stdoutStderr, err := cmd.CombinedOutput()
 	if err != nil {
-		log.Print(err.Error())
+		fmt.Print(err.Error())
 	}
-	log.Printf("%s\n", stdoutStderr)
+	fmt.Printf("%s\n", stdoutStderr)
 }
 
 func restoreCommand(what string, s Specification) {
 	args := fmt.Sprintf("s3cmd sync --secret_key=%v --access_key=%v s3://bonde-cache/%v/%v/ ./data/%v/", awsSecret, awsAccess, s.Env, what, what)
-	log.Print(args)
+	fmt.Print(args)
 
 	command := strings.Split(args, " ")
 	execCommand(command)
@@ -36,7 +35,7 @@ func restoreCommand(what string, s Specification) {
 
 func updateCommand(what string, s Specification) {
 	args := fmt.Sprintf("s3cmd sync --secret_key=%v --access_key=%v ./data/%v/ s3://bonde-cache/%v/%v/", awsSecret, awsAccess, what, s.Env, what)
-	log.Print(args)
+	fmt.Print(args)
 
 	command := strings.Split(args, " ")
 	execCommand(command)

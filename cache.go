@@ -15,20 +15,6 @@ type CacheManager struct {
 	r *Redis
 }
 
-// Mobilization is cached at Redis
-type Mobilization struct {
-	ID              int    `json:"id" redis:"id" graphql:"id"`
-	CommunityID     int    `json:"community_id" redis:"community_id" graphql:"communityId"`
-	Name            string `json:"name" redis:"name" graphql:"name"`
-	Content         []byte `json:"content" redis:"content" graphql:""`
-	CachedAt        string `json:"cached_at" redis:"cached_at" graphql:""`
-	Slug            string `json:"slug" redis:"slug" graphql:"slug"`
-	CustomDomain    string `json:"custom_domain" redis:"custom_domain" graphql:"customDomain"`
-	UpdatedAt       string `json:"updated_at" redis:"updated_at" graphql:"updatedAt"`
-	Public          bool   `json:"public" redis:"public" graphql:""`
-	CertificateRoot bool   `json:"certificate_root" redis:"certificate_root" graphql:""`
-}
-
 // HTTPResponse help handle output from requests
 type HTTPResponse struct {
 	url      string

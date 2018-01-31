@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/facebookgo/grace/gracehttp"
 	"github.com/labstack/echo"
@@ -16,10 +15,9 @@ import (
 
 // Web struct to start server
 type Web struct {
-	s                      Specification
-	r                      *Redis
-	g                      *Graphql
-	CustomHTTPErrorHandler echo.HTTPErrorHandler
+	s Specification
+	r *Redis
+	g *Graphql
 }
 
 // StartNonSSL Handle Redirect to HTTPS
@@ -64,23 +62,7 @@ func (web *Web) StartSSL() {
 		return c.String(http.StatusOK, "Resetting cache")
 	})
 
-	e.GET("/", func(c echo.Context) error {
-		req := c.Request()
-		host := req.Host
-		mob := web.r.ReadMobilization("cached_urls:" + host)
-		// noCache := c.QueryParam("nocache")
-		tCachedAt, _ := time.Parse("2006-01-02T15:04:05.000-07:00", mob.CachedAt)
-
-		// if noCache == "1" {
-		// 	readHTMLFromHTTPAndSaveToRedis(mob, spec)
-		// 	log.Println("Limpando cache..." + mob.Name)
-		// }
-
-		if mob.Public {
-			return c.HTML(http.StatusOK, string(mob.Content)+"<!--"+tCachedAt.Format(time.RFC3339)+"-->")
-		}
-		return c.HTML(http.StatusOK, string("Página não encontrada!"))
-	})
+	e.GET("/", web.routeRoot)
 
 	e.AutoTLSManager.HostPolicy = autocert.HostWhitelist(customDomains...)
 	e.AutoTLSManager.Cache = autocert.DirCache("./data/certificates/")
