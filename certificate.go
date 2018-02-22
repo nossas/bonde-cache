@@ -7,7 +7,7 @@ import (
 	"github.com/joeguo/tldextract"
 )
 
-// Certs handle async files to use at web server
+// CertManager handle async files to use at web server
 type CertManager struct {
 	s Specification
 	r *Redis

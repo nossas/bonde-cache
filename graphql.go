@@ -50,7 +50,7 @@ type DnsHostedZone struct {
 	// IsActive bool `json:"ns_ok" redis:"ns_ok" graphql:"nsOk"`
 }
 
-// Certificate is cached at Redis
+// Certificate from Graphql and cached at Redis
 type Certificate struct {
 	ID              int    `json:"id" redis:"id" graphql:"id"`
 	CommunityID     int    `json:"community_id" redis:"community_id" graphql:"communityId"`
@@ -66,7 +66,7 @@ type Certificate struct {
 	UpdatedAt       string `json:"updated_at" redis:"updated_at" graphql:"updatedAt"`
 }
 
-// Mobilization is cached at Redis
+// Mobilization from Graphql and cached at Redis
 type Mobilization struct {
 	ID              int    `json:"id" redis:"id" graphql:"id"`
 	CommunityID     int    `json:"community_id" redis:"community_id" graphql:"communityId"`

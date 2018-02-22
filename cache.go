@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// Cache is responsible to manager mob content
+// CacheManager is responsible to manager mob content
 type CacheManager struct {
 	s Specification
 	g *Graphql
@@ -41,8 +41,12 @@ func (c *CacheManager) Populate() {
 
 	for _, mob := range mobs {
 		var cachedMob = c.r.ReadMobilization("cached_urls:" + mob.CustomDomain)
-		tUpdatedAt, _ := time.Parse("2006-01-02T15:04:05.000-07:00", mob.UpdatedAt)
-		tCachedAt, _ := time.Parse("2006-01-02T15:04:05.000-07:00", cachedMob.CachedAt)
+		tUpdatedAt, _ := time.Parse(
+			"2006-01-02T15:04:05.000-07:00",
+			mob.UpdatedAt)
+		tCachedAt, _ := time.Parse(
+			"2006-01-02T15:04:05.000-07:00",
+			cachedMob.CachedAt)
 
 		if string(cachedMob.Content) == "" {
 			c.readHTMLFromHTTPAndSaveToRedis(mob, c.s)
@@ -54,7 +58,7 @@ func (c *CacheManager) Populate() {
 	}
 }
 
-// GetUrls search to domains we must allow to be public
+// GetAllowedDomains search to domains we must allow to be public
 func (c *CacheManager) GetAllowedDomains() (customDomains []string, mobs []Mobilization) {
 
 	c.g.GetAllMobilizations()
