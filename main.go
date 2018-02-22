@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 
+	"github.com/facebookgo/grace/gracehttp"
 	"github.com/jasonlvhit/gocron"
 	"github.com/kelseyhightower/envconfig"
 )
@@ -28,17 +29,12 @@ func main() {
 		log.Fatal(err.Error())
 	}
 
-	g := &Graphql{s: s}
-	r := &Redis{s: s}
-	web := &Web{s: s, g: g, r: r}
-	worker := &Worker{s: s, g: g, r: r}
+	web := &Web{s: s}
+	worker := &Worker{s: s}
 
-	g.CreateClient()
-	r.CreatePool()
+	web.Setup()
+	worker.Setup()
 
-	go web.StartNonSSL()
-	go web.StartSSL()
-
-	worker.Start()
+	gracehttp.Serve(web.server.Server, web.serverSSL.TLSServer)
 	<-gocron.Start()
 }

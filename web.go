@@ -15,15 +15,37 @@ import (
 
 // Web struct to start server
 type Web struct {
-	s Specification
-	r *Redis
-	g *Graphql
+	s         Specification
+	r         *Redis
+	g         *Graphql
+	serverSSL *echo.Echo
+	server    *echo.Echo
+	cache     *CacheManager
+	domains   []string
 }
 
-// StartNonSSL Handle Redirect to HTTPS
-func (web *Web) StartNonSSL() {
+// Setup Web to config non ssl and ssl servers
+func (web *Web) Setup() {
+	web.g = &Graphql{s: web.s}
+	web.r = &Redis{s: web.s}
 
-	ee := echo.New()
+	web.g.CreateClient()
+	web.r.CreatePool()
+
+	web.cache = &CacheManager{s: web.s, g: web.g, r: web.r}
+	web.domains, _ = web.cache.GetAllowedDomains()
+
+	web.server = echo.New()
+	web.serverSSL = echo.New()
+
+	web.SetupNonSSL()
+	web.SetupSSL()
+}
+
+// SetupNonSSL Handle Redirect to HTTPS
+func (web *Web) SetupNonSSL() {
+
+	ee := web.server
 	ee.Pre(middleware.RemoveTrailingSlash())
 	ee.Pre(middleware.HTTPSWWWRedirect())
 	ee.Pre(middleware.HTTPSRedirect())
@@ -33,20 +55,13 @@ func (web *Web) StartNonSSL() {
 	gracehttp.SetLogger(Log)
 
 	ee.Server.Addr = ":" + web.s.Port
-	ee.Logger.Fatal(gracehttp.Serve(ee.Server))
+	// ee.Logger.Fatal(gracehttp.Serve(ee.Server))
 }
 
-// StartSSL Handle HTTPS Certificates - Show Mob or Error Page
-func (web *Web) StartSSL() {
-	var cache = &CacheManager{
-		g: web.g,
-		s: web.s,
-		r: web.r,
-	}
+// SetupSSL Handle HTTPS Certificates - Show Mob or Error Page
+func (web *Web) SetupSSL() {
 
-	customDomains, _ := cache.GetAllowedDomains()
-
-	e := echo.New()
+	e := web.serverSSL
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 	e.Use(middleware.GzipWithConfig(middleware.GzipConfig{Level: 2}))
@@ -64,7 +79,7 @@ func (web *Web) StartSSL() {
 
 	e.GET("/", web.routeRoot)
 
-	e.AutoTLSManager.HostPolicy = autocert.HostWhitelist(customDomains...)
+	e.AutoTLSManager.HostPolicy = autocert.HostWhitelist(web.domains...)
 	e.AutoTLSManager.Cache = autocert.DirCache("./data/certificates/")
 	e.AutoTLSManager.Email = "tech@nossas.org"
 	e.AutoTLSManager.ForceRSA = true
@@ -93,5 +108,6 @@ func (web *Web) StartSSL() {
 	gracehttp.SetLogger(LogSsl)
 
 	s.Addr = ":" + web.s.PortSsl
-	e.Logger.Fatal(gracehttp.Serve(e.TLSServer))
+	web.serverSSL = e
+	// e.Logger.Fatal(gracehttp.Serve(e.TLSServer))
 }

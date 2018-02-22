@@ -14,8 +14,8 @@ type Worker struct {
 	r     *Redis
 }
 
-// Start are entry point to recurring tasks
-func (w *Worker) Start() {
+// Setup are entry point to recurring tasks
+func (w *Worker) Setup() {
 	w.cache = &CacheManager{
 		g: w.g,
 		s: w.s,
