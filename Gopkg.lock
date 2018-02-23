@@ -47,13 +47,13 @@
   name = "github.com/garyburd/redigo"
   packages = ["internal","redis"]
   revision = "d1ed5c67e5794de818ea85e6b522fda02623a484"
-  version = "v1.4.0"
+  version = "v1.5.0"
 
 [[projects]]
-  branch = "master"
   name = "github.com/golang/protobuf"
   packages = ["proto"]
   revision = "925541529c1fa6821df4e44ce2723319eb2be768"
+  version = "v1.0.0"
 
 [[projects]]
   branch = "master"
@@ -65,7 +65,7 @@
   branch = "master"
   name = "github.com/joeguo/tldextract"
   packages = ["."]
-  revision = "98a8d4207a01c2990a1648bc2b2683f9725241cf"
+  revision = "b623e05744077de211085e69e5189dd87b3a2ce1"
 
 [[projects]]
   name = "github.com/kelseyhightower/envconfig"
@@ -131,7 +131,7 @@
   branch = "master"
   name = "github.com/prometheus/procfs"
   packages = [".","internal/util","nfs","xfs"]
-  revision = "cb4147076ac75738c9a7d279075a253c0cc5acbd"
+  revision = "282c8707aa210456a825798969cc27edda34992a"
 
 [[projects]]
   name = "github.com/rafaeljusto/redigomock"
@@ -143,7 +143,7 @@
   branch = "master"
   name = "github.com/shurcooL/go"
   packages = ["ctxhttp"]
-  revision = "004faa6b0118cf52635363b72b51cdcc297800a2"
+  revision = "364c5ae8518b51f5fda954762864d6f4d5c30c89"
 
 [[projects]]
   branch = "master"
@@ -154,14 +154,8 @@
 [[projects]]
   name = "github.com/stretchr/testify"
   packages = ["assert"]
-  revision = "b91bfb9ebec76498946beb6af7c0230c7cc7ba6c"
-  version = "v1.2.0"
-
-[[projects]]
-  branch = "master"
-  name = "github.com/thoas/stats"
-  packages = ["."]
-  revision = "37829025d2242afb04d91572cb143e00019e2aac"
+  revision = "12b6f73e6084dad08a7c6e575284b177ecafbc71"
+  version = "v1.2.1"
 
 [[projects]]
   branch = "master"
@@ -179,25 +173,25 @@
   branch = "master"
   name = "golang.org/x/crypto"
   packages = ["acme","acme/autocert"]
-  revision = "1875d0a70c90e57f11972aefd42276df65e895b9"
+  revision = "49796115aa4b964c318aad4f3084fdb41e9aa067"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/net"
   packages = ["context","context/ctxhttp"]
-  revision = "0ed95abb35c445290478a5348a7b38bb154135fd"
+  revision = "cbe0f9307d0156177f9dd5dc85da1a31abc5f2fb"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/oauth2"
   packages = [".","internal"]
-  revision = "a032972e28060ca4f5644acffae3dfc268cc09db"
+  revision = "543e37812f10c46c622c9575afd7ad22f22a12ba"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/sys"
   packages = ["unix"]
-  revision = "ff2a66f350cefa5c93a634eadb5d25bb60c85a9c"
+  revision = "88d2dcc510266da9f7f8c7f34e1940716cab5f5c"
 
 [[projects]]
   name = "google.golang.org/appengine"
@@ -208,6 +202,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "78921135da75afcf41660892941fc9c25339ba826c0bc5f8703c942c6fde911b"
+  inputs-digest = "5624af7aeb1b057d52070a09d977a22486c60782415083d147446930ba586bef"
   solver-name = "gps-cdcl"
   solver-version = 1
