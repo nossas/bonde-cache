@@ -5,7 +5,7 @@ pipeline:
       - go get -u github.com/golang/dep/cmd/dep
       - cp -R . /go/src/app && cd /go/src/app && dep ensure
       - go build
-      - go test
+      - go test -v -cover
     when:
       event: [push, tag]
   publish-docker-staging:

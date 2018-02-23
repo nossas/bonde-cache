@@ -25,7 +25,10 @@ func (web *Web) routeRoot(c echo.Context) error {
 	return c.HTML(http.StatusOK, string("Página não encontrada!"))
 }
 
-// func routeResetAll
+func (web *Web) routeReset(c echo.Context) error {
+	// evacuateCache(spec)
+	return c.String(http.StatusOK, "Resetting cache")
+}
 
 // CustomHTTPErrorHandler Echo HTTP Error Handler
 func (web *Web) CustomHTTPErrorHandler(err error, c echo.Context) {

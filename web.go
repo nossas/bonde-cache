@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/tls"
 	"log"
-	"net/http"
 	"os"
 
 	"github.com/facebookgo/grace/gracehttp"
@@ -71,12 +70,7 @@ func (web *Web) SetupSSL() {
 	e.HTTPErrorHandler = web.CustomHTTPErrorHandler
 
 	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
-
-	e.GET("/reset-all", func(c echo.Context) error {
-		// evacuateCache(spec)
-		return c.String(http.StatusOK, "Resetting cache")
-	})
-
+	e.GET("/reset-all", web.routeReset)
 	e.GET("/", web.routeRoot)
 
 	e.AutoTLSManager.HostPolicy = autocert.HostWhitelist(web.domains...)
