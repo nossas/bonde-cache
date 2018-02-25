@@ -34,7 +34,7 @@ type HttpResponse struct {
 }
 
 func getUrls() (customDomains []string, mobs []Mobilization) {
-	var myClient = &http.Client{Timeout: 10 * time.Second}
+	var myClient = &http.Client{Timeout: 30 * time.Second}
 	r, err := myClient.Get("https://api.bonde.org/mobilizations")
 	if err != nil {
 		fmt.Println(err)
